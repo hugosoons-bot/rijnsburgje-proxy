@@ -292,7 +292,7 @@ Categorieën uit: Pasta,Indiaas,Ovenplaat,Vegetarisch,Snel,Doordeweeks,Soep,Vis,
     }
     body.messages=[{role:"user",content:userMsg}];
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data = await resp.json();
     const tekst = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
     const s=tekst.indexOf('['), e=tekst.lastIndexOf(']');
