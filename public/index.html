@@ -434,8 +434,8 @@ function renderZoeken(){
         ?`<input id="inp-term" class="input" style="width:100%" placeholder="Bijv. 'lasagne' of 'snelle pasta met spinazie'" value="${h(S.zoekInput)}" onkeydown="if(event.key==='Enter')zoek()">`
         :`<input id="inp-url" class="input" style="width:100%" placeholder="https://www.allerhande.nl/recept/..." value="${h(S.zoekUrl)}" onkeydown="if(event.key==='Enter')zoek()">
           <p style="font-size:11px;color:#9c8060;margin-top:5px;font-style:italic">Werkt met allerhande.nl, chickslovefood.com, lekkerensimpel.com en meer.</p>`}
-      <button class="btn-search" onclick="zoek()" ${S.laden?'disabled':''>${S.laden?'Zoeken...':'Zoeken →'}</button>
-      <button class="btn-suggest" onclick="suggestie()" ${S.sugLaden?'disabled':''>${S.sugLaden?'Suggesties ophalen...':'✨ Doe een suggestie (vegetarisch, max 12 ingrediënten)'}</button>
+      <button class="btn-search" onclick="zoek()" ${S.laden?'disabled':''}>${S.laden?'Zoeken...':'Zoeken →'}</button>
+      <button class="btn-suggest" onclick="suggestie()" ${S.sugLaden?'disabled':''}>${S.sugLaden?'Suggesties ophalen...':'✨ Doe een suggestie (vegetarisch, max 12 ingrediënten)'}</button>
     </div>
     ${S.fout?`<div class="box-error">${h(S.fout)}</div>`:''}
     ${S.resultaten.length>0
