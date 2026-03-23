@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "api/fetch.py": {
-      "runtime": "python3.12",
-      "maxDuration": 15
-    }
-  },
   "rewrites": [
     { "source": "/fetch", "destination": "/api/fetch" },
     { "source": "/health", "destination": "/api/fetch" }
