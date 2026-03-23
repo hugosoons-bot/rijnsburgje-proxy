@@ -1,10 +1,561 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8">
-  <title>Rijnsburgje Proxy</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant 't Rijnsburgje</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Georgia,serif;background:#faf6ef;color:#2d1f0e;min-height:100vh}
+input,textarea,button{font-family:inherit}
+button{cursor:pointer}
+
+/* Header */
+#header{background:#2d1f0e;padding:16px 18px 0;position:sticky;top:0;z-index:100}
+#header-inner{max-width:680px;margin:0 auto}
+#header h1{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#f5e6c8;letter-spacing:-.01em}
+#header-sub{color:#9c8060;font-size:11px;margin:2px 0 11px;font-style:italic}
+#tabs{display:flex}
+.tab-btn{padding:7px 13px;background:transparent;color:#9c8060;border:none;font-size:12px;font-family:'Playfair Display',serif;font-weight:400;border-radius:8px 8px 0 0;transition:all .15s;white-space:nowrap}
+.tab-btn.active{background:#faf6ef;color:#2d1f0e;font-weight:700}
+
+/* Content */
+#content{max-width:680px;margin:0 auto;padding:16px 13px 48px}
+
+/* Cards */
+.card{background:#fffef9;border:1.5px solid #e0d4be;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:all .2s;position:relative;margin-bottom:11px}
+.card.selected{border:2px solid #c8853a;box-shadow:0 4px 20px rgba(200,133,58,.18)}
+.card-body{padding:15px 18px 11px}
+.card-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#2d1f0e;margin:0 0 5px;line-height:1.3}
+.card-desc{color:#6b5040;font-size:13px;margin:0 0 8px;line-height:1.5}
+.card-note{background:#fdf6e8;border:1px solid #ede0c8;border-radius:6px;padding:5px 9px;font-size:12px;color:#7a5c35;margin:0 0 9px;font-style:italic;line-height:1.4}
+.card-toggle{padding:7px 18px;background:#f7f0e4;cursor:pointer;font-size:12px;color:#7a5c35;font-family:'Playfair Display',serif;display:flex;justify-content:space-between;border-top:1px solid #ede0c8;border-bottom:1px solid #ede0c8;user-select:none}
+.card-detail{padding:13px 18px;background:#fffef9;display:none}
+.card-detail.open{display:block}
+.card-detail h4{font-family:'Playfair Display',serif;font-size:12px;color:#7a5c35;font-weight:600;margin-bottom:6px}
+.card-detail ul,.card-detail ol{margin:0 0 11px;padding:0 0 0 15px}
+.card-detail li{font-size:13px;color:#4a3520;margin-bottom:3px;line-height:1.4}
+.card-detail ol li{margin-bottom:5px;line-height:1.5}
+.card-actions{padding:9px 18px 13px;display:flex;gap:6px;flex-wrap:wrap}
+.btn{border:none;border-radius:8px;padding:8px 0;font-size:12px;font-family:'Playfair Display',serif;font-weight:600;transition:all .15s}
+.btn-primary{background:#2d1f0e;color:#f5e6c8;flex:1;min-width:100px}
+.btn-orange{background:#c8853a;color:white;flex:1;min-width:80px}
+.btn-saved{background:#e8f4e8;color:#3a7a3a;flex:1;min-width:80px}
+.btn-light{background:#f0e8d8;color:#7a5c35;padding:8px 13px}
+.btn-ghost{background:none;color:#c0aa88;border:1px solid #ddd0b8;padding:8px 10px}
+.btn-deselect{background:#f0e8d8;color:#7a5c35;flex:1;min-width:100px}
+.check-badge{position:absolute;top:10px;right:10px;background:#c8853a;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+
+/* Badges */
+.badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+.badge{background:#f0e8d8;color:#7a5c35;border-radius:20px;padding:2px 9px;font-size:11px;font-family:'Playfair Display',serif;font-weight:600;border:1px solid #ddd0b8;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.badge.tag{background:#e8f0fe}
+.badge-remove{opacity:.6;font-size:10px;cursor:pointer;line-height:1}
+
+/* Stars */
+.stars{display:flex;gap:2px}
+.star{font-size:17px;color:#ddd0b8;cursor:pointer;transition:color .15s;line-height:1}
+.star.on{color:#c8853a}
+
+/* Inputs */
+.input{padding:9px 12px;border-radius:8px;border:1.5px solid #ddd0b8;font-size:13px;color:#2d1f0e;outline:none;font-family:Georgia,serif;background:white}
+.input:focus{border-color:#c8853a}
+textarea.input{resize:vertical;background:#faf6ef}
+
+/* Filter bar */
+#filter-bar{display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;margin-bottom:13px;scrollbar-width:none}
+#filter-bar::-webkit-scrollbar{display:none}
+.filter-btn{padding:4px 11px;border-radius:20px;border:1.5px solid #ddd0b8;background:white;color:#7a5c35;font-size:11px;font-family:'Playfair Display',serif;white-space:nowrap}
+.filter-btn.active{background:#c8853a;color:white;border-color:#c8853a}
+
+/* Search box */
+.search-box{background:white;border-radius:12px;padding:15px;border:1.5px solid #e0d4be;margin-bottom:16px}
+.mode-btns{display:flex;gap:7px;margin-bottom:11px}
+.mode-btn{flex:1;padding:7px 0;border-radius:8px;background:#f0e8d8;color:#7a5c35;border:none;font-size:12px;font-family:'Playfair Display',serif}
+.mode-btn.active{background:#2d1f0e;color:white}
+.search-hint{font-size:11px;color:#9c8060;margin:5px 0 0;font-style:italic}
+.btn-search{width:100%;margin-top:9px;padding:11px 0;background:#c8853a;color:white;border:none;border-radius:8px;font-size:14px;font-family:'Playfair Display',serif;font-weight:700}
+.btn-search:disabled{background:#9c8060;cursor:not-allowed}
+
+/* Error / info boxes */
+.box-error{background:#fdf0e8;border:1px solid #f0c8a0;border-radius:8px;padding:10px 13px;margin-bottom:13px;color:#7a3a0e;font-size:13px}
+.box-info{background:#f7f0e4;border-radius:10px;padding:10px 14px;margin-bottom:13px;font-family:'Playfair Display',serif;font-size:13px;color:#7a5c35}
+.empty{text-align:center;padding:40px 20px;color:#9c8060;font-style:italic;font-size:14px}
+.hint{text-align:center;padding:28px 20px;color:#9c8060;font-style:italic;font-size:13px}
+
+/* Progress bar */
+.progress-bar{display:flex;gap:8px;margin-bottom:13px}
+.progress-segment{flex:1;height:4px;border-radius:4px;background:#e0d4be;transition:background .3s}
+.progress-segment.done{background:#c8853a}
+
+/* Shopping list */
+.afdeling-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.afdeling-title{font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:#4a3520}
+.afdeling-line{flex:1;height:1px;background:#e0d4be}
+.afdeling-count{font-size:11px;color:#9c8060}
+.shop-item{display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:8px;cursor:pointer;border:1px solid #e8e0d0;transition:all .15s;margin-bottom:4px}
+.shop-item.checked{opacity:.7}
+.shop-checkbox{width:18px;height:18px;border-radius:4px;flex-shrink:0;border:2px solid #c0aa88;background:transparent;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.shop-checkbox.checked{border-color:#c8853a;background:#c8853a}
+.shop-name{flex:1;font-size:14px;color:#2d1f0e}
+.shop-name.checked{text-decoration:line-through;color:#9c8060}
+.shop-qty{font-size:13px;color:#7a5c35;font-weight:600}
+
+/* Edit modal */
+#modal-overlay{position:fixed;inset:0;background:rgba(45,31,14,.55);z-index:200;display:none;align-items:flex-end;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal{background:#fffef9;border-radius:16px 16px 0 0;padding:20px 20px 30px;width:100%;max-width:680px;box-shadow:0 -4px 30px rgba(0,0,0,.15);max-height:80vh;overflow-y:auto}
+#modal h3{font-family:'Playfair Display',serif;font-size:15px;color:#2d1f0e}
+#modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:#9c8060}
+.cat-btn{padding:4px 11px;border-radius:20px;border:1.5px solid #ddd0b8;background:white;color:#7a5c35;font-size:12px;font-family:'Playfair Display',serif;margin:0 4px 4px 0}
+.cat-btn.active{background:#c8853a;color:white;border-color:#c8853a}
+.section-label{font-family:'Playfair Display',serif;font-size:12px;color:#7a5c35;font-weight:600;margin:0 0 7px}
+.bron-link{font-size:11px;color:#c8853a;text-decoration:underline}
+
+@media(max-width:500px){
+  #header h1{font-size:17px}
+  .tab-btn{padding:7px 9px;font-size:11px}
+}
+</style>
 </head>
 <body>
-  <h1>🍳 Rijnsburgje Proxy draait!</h1>
+
+<div id="header">
+  <div id="header-inner">
+    <div style="display:flex;align-items:baseline;gap:9px">
+      <h1>Restaurant 't Rijnsburgje</h1>
+      <span style="font-size:17px">🍳</span>
+    </div>
+    <div id="header-sub">laden...</div>
+    <div id="tabs">
+      <button class="tab-btn active" onclick="setTab('recepten')">Mijn Recepten</button>
+      <button class="tab-btn" onclick="setTab('zoeken')">Ontdekken</button>
+      <button class="tab-btn" onclick="setTab('weekmenu')">Weekmenu</button>
+      <button class="tab-btn" onclick="setTab('boodschappen')">Boodschappen</button>
+    </div>
+  </div>
+</div>
+
+<div id="content"></div>
+
+<!-- Edit modal -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 id="modal-title">Bewerk recept</h3>
+      <button id="modal-close" onclick="sluitModal()">✕</button>
+    </div>
+    <p class="section-label">Categorieën</p>
+    <div id="modal-cats" style="display:flex;flex-wrap:wrap;margin-bottom:14px"></div>
+    <p class="section-label">Tags</p>
+    <div id="modal-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:24px"></div>
+    <div style="display:flex;gap:7px;margin-bottom:14px">
+      <input id="modal-tag-input" class="input" style="flex:1" placeholder="Nieuwe tag (bijv. BBQ, feestdagen)" onkeydown="if(event.key==='Enter')addModalTag()">
+      <button class="btn btn-light" onclick="addModalTag()">+ Tag</button>
+    </div>
+    <p class="section-label">Notities</p>
+    <textarea id="modal-notities" class="input" style="width:100%;min-height:80px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
+    <button class="btn btn-primary" style="width:100%;margin-top:12px;padding:12px 0;font-size:14px" onclick="slaModalOp()">Wijzigingen opslaan</button>
+  </div>
+</div>
+
+<script>
+// ── Data & state ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'rijnsburgje-recepten-v3';
+const SEL_KEY     = 'rijnsburgje-selectie-v3';
+const PERS_KEY    = 'rijnsburgje-personen-v3';
+
+const CATEGORIEEN = ["Pasta","Indiaas","Ovenplaat","Vegetarisch","Snel","Doordeweeks","Soep","Vis","Vlees","Salade","Groepen","Familie","Makkelijk","Feest"];
+
+const AFDELINGEN = [
+  {naam:"🥦 Groente & Fruit",  kleur:"#e8f5e9", woorden:["ui","uien","knoflook","gember","tomaat","tomaten","paprika","courgette","aubergine","spinazie","wortel","broccoli","bloemkool","prei","champignon","paddenstoel","sla","komkommer","avocado","citroen","limoen","aardappel","bataat","zoete aardappel","venkel","kool","spruitjes","asperge","basilicum","peterselie","koriander","tijm","rozemarijn","bieslook"]},
+  {naam:"🧀 Zuivel & Eieren",  kleur:"#fff8e1", woorden:["melk","room","slagroom","boter","kaas","pecorino","parmezaan","ricotta","mozzarella","cheddar","yoghurt","crème fraîche","kwark","ei","eieren","brie","feta","mascarpone"]},
+  {naam:"🥩 Vlees & Vis",      kleur:"#fce4ec", woorden:["kip","kipfilet","gehakt","rundvlees","varkensvlees","spek","pancetta","guanciale","bacon","worst","zalm","tonijn","garnalen","makreel","mosselen","vis","lam","kalkoen"]},
+  {naam:"🥫 Blikken & Potten", kleur:"#e8eaf6", woorden:["blik","kidneybonen","linzen","kikkererwten","bonen","kokosmelk","tomatenpuree","olijven","kappertjes","pesto","tahini","harissa"]},
+  {naam:"🍝 Pasta & Granen",   kleur:"#fff3e0", woorden:["pasta","spaghetti","penne","fusilli","tagliatelle","rijst","couscous","bulgur","quinoa","lasagne","gnocchi","noedels","mie","orzo","polenta"]},
+  {naam:"🫙 Kruiden & Sauzen", kleur:"#f3e5f5", woorden:["zout","peper","olie","olijfolie","azijn","sojasaus","sambal","ketjap","mosterd","honing","suiker","bloem","maizena","garam masala","kurkuma","komijn","kardemom","kaneel","paprikapoeder","chilipoeder","oregano","nootmuskaat","curry","bouillon","bouillonblokje"]},
+  {naam:"🍞 Brood & Bakkerij", kleur:"#efebe9", woorden:["brood","tortilla","wrap","pita","naan","crackers"]},
+  {naam:"🧊 Diepvries",        kleur:"#e3f2fd", woorden:["diepvries","bevroren"]},
+  {naam:"🛒 Overig",           kleur:"#f5f5f5", woorden:[]},
+];
+
+const DEMO = [
+  {id:"demo-1",titel:"Pasta Carbonara",omschrijving:"Klassieke Romeinse pasta met ei, pecorino en guanciale. Romig zonder room.",personen:4,
+   ingredienten:[{naam:"spaghetti",hoeveelheid:400,eenheid:"g"},{naam:"guanciale of pancetta",hoeveelheid:150,eenheid:"g"},{naam:"eieren",hoeveelheid:4,eenheid:"st"},{naam:"pecorino romano",hoeveelheid:80,eenheid:"g"},{naam:"zwarte peper",hoeveelheid:1,eenheid:"tl"}],
+   stappen:["Kook de pasta al dente in ruim gezouten water.","Bak de guanciale knapperig in een droge koekenpan.","Klop eieren los met pecorino en veel zwarte peper.","Voeg pasta-kookvocht toe aan het eimengsel.","Meng buiten het vuur met het eimengsel en guanciale.","Serveer direct met extra pecorino."],
+   categorieen:["Pasta","Doordeweeks"],tags:["favoriet"],notities:"Niet te veel vuur, anders stolt het ei.",bron:"https://www.seriouseats.com/the-best-carbonara",rating:5,opgeslagen:true,datum:"2024-01-15"},
+  {id:"demo-2",titel:"Indiase Dal Makhani",omschrijving:"Rijke romige linzensoep met zwarte linzen, tomaat en boter.",personen:4,
+   ingredienten:[{naam:"zwarte linzen",hoeveelheid:250,eenheid:"g"},{naam:"kidneybonen (blik)",hoeveelheid:200,eenheid:"g"},{naam:"tomaten (blik)",hoeveelheid:400,eenheid:"g"},{naam:"boter",hoeveelheid:60,eenheid:"g"},{naam:"slagroom",hoeveelheid:100,eenheid:"ml"},{naam:"ui",hoeveelheid:1,eenheid:"st"},{naam:"knoflook",hoeveelheid:4,eenheid:"teentjes"},{naam:"garam masala",hoeveelheid:2,eenheid:"tl"}],
+   stappen:["Week de linzen een nacht en kook ze gaar (ca. 45 min).","Fruit ui en knoflook in boter.","Voeg specerijen toe en bak 2 minuten.","Voeg tomaten toe en laat 15 min sudderen.","Meng met linzen, 30 min op laag vuur pruttelen.","Slagroom erdoor, op smaak brengen."],
+   categorieen:["Indiaas","Vegetarisch"],tags:["troosteten"],notities:"Heerlijk de dag erna ook.",bron:"https://www.bonappetit.com/recipe/dal-makhani",rating:4,opgeslagen:true,datum:"2024-01-20"}
+];
+
+let state = {
+  tab: 'recepten',
+  recepten: [],
+  geselecteerd: [],
+  personen: 4,
+  filterCat: 'Alle',
+  zoekterm: '',
+  zoekModus: 'term',
+  zoekInput: '',
+  zoekUrl: '',
+  laden: false,
+  fout: '',
+  resultaten: [],
+  editId: null,
+  modalCats: [],
+  modalTags: [],
+};
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+function load() {
+  try { const v = localStorage.getItem(STORAGE_KEY); if(v) return JSON.parse(v); } catch{}
+  return null;
+}
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.recepten));
+    localStorage.setItem(SEL_KEY, JSON.stringify(state.geselecteerd));
+    localStorage.setItem(PERS_KEY, String(state.personen));
+  } catch{}
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const stored = load();
+  state.recepten = stored || DEMO;
+  try { const s = localStorage.getItem(SEL_KEY); if(s) state.geselecteerd = JSON.parse(s); } catch{}
+  try { const p = localStorage.getItem(PERS_KEY); if(p) state.personen = parseInt(p)||4; } catch{}
+  render();
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function schaal(h, van, naar) { const v = h*(naar/van); return v%1===0?v:parseFloat(v.toFixed(1)); }
+function getAfdeling(naam) {
+  const n = naam.toLowerCase();
+  for(const a of AFDELINGEN) { if(a.woorden.some(w=>n.includes(w))) return a.naam; }
+  return "🛒 Overig";
+}
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── State mutations ───────────────────────────────────────────────────────────
+function setTab(t) { state.tab=t; state.fout=''; render(); }
+function setFilterCat(c) { state.filterCat=c; render(); }
+function setZoekModus(m) { state.zoekModus=m; render(); }
+function toggleSel(id) {
+  if(state.geselecteerd.includes(id)) state.geselecteerd=state.geselecteerd.filter(x=>x!==id);
+  else if(state.geselecteerd.length<2) state.geselecteerd.push(id);
+  else state.geselecteerd=[state.geselecteerd[1],id];
+  save(); render();
+}
+function setRating(id,r) { const rec=state.recepten.find(x=>x.id===id); if(rec){rec.rating=r;save();render();} }
+function verwijder(id) { state.recepten=state.recepten.filter(r=>r.id!==id); state.geselecteerd=state.geselecteerd.filter(x=>x!==id); save(); render(); }
+function slaOp(idx) {
+  const r = state.resultaten[idx];
+  if(!r) return;
+  const nieuw = {...r, opgeslagen:true, datum:new Date().toISOString().split('T')[0], tags:r.tags||[], notities:r.notities||''};
+  const bestaat = state.recepten.findIndex(x=>x.id===nieuw.id);
+  if(bestaat>=0) state.recepten[bestaat]=nieuw; else state.recepten.push(nieuw);
+  state.resultaten[idx]={...state.resultaten[idx],opgeslagen:true};
+  save(); render();
+}
+function setPersonen(v) { state.personen=parseInt(v)||4; save(); render(); }
+
+// ── Zoeken ────────────────────────────────────────────────────────────────────
+async function zoek() {
+  const query = (state.zoekModus==='url' ? document.getElementById('input-url') : document.getElementById('input-term'))?.value?.trim();
+  if(!query) return;
+  if(state.zoekModus==='url') state.zoekUrl=query; else state.zoekInput=query;
+  state.laden=true; state.fout=''; state.resultaten=[]; render();
+
+  const sys = `Je bent een receptassistent. Geef ALLEEN een JSON array terug. Geen markdown, geen backticks.
+Formaat: [{"id":"slug","titel":"","omschrijving":"","personen":4,"ingredienten":[{"naam":"","hoeveelheid":0,"eenheid":""}],"stappen":[""],"categorieen":[""],"tags":[],"notities":"","bron":"","rating":0,"opgeslagen":false,"datum":"${new Date().toISOString().split('T')[0]}"}]
+Categorieën uit: Pasta,Indiaas,Ovenplaat,Vegetarisch,Snel,Doordeweeks,Soep,Vis,Vlees,Salade,Groepen,Familie,Makkelijk,Feest`;
+
+  try {
+    let userMsg;
+    const body = {model:"claude-sonnet-4-20250514",max_tokens:1000,system:sys,messages:[]};
+
+    if(state.zoekModus==='url') {
+      // Gebruik eigen proxy op zelfde domein
+      const proxyResp = await fetch(`/fetch?url=${encodeURIComponent(query)}`);
+      if(!proxyResp.ok) { const e=await proxyResp.json().catch(()=>{}); throw new Error(e?.error||'Proxy fout'); }
+      const proxyData = await proxyResp.json();
+      userMsg = `Zet dit recept om naar JSON. Geef 1 recept in een array.\n\nURL: ${query}\n\n---\n${proxyData.text}`;
+    } else {
+      body.tools=[{type:"web_search_20250305",name:"web_search"}];
+      userMsg = `Geef 3 lekkere recepten voor: "${query}". Varieer. Geef als JSON array.`;
+    }
+    body.messages=[{role:"user",content:userMsg}];
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data = await resp.json();
+    const tekst = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const s=tekst.indexOf('['), e=tekst.lastIndexOf(']');
+    if(s===-1) throw new Error('Geen recepten gevonden');
+    const parsed = JSON.parse(tekst.slice(s,e+1));
+    if(!parsed.length) throw new Error('Lege lijst');
+    state.resultaten = parsed.map(r=>({...r,tags:r.tags||[],notities:r.notities||'',bron:r.bron||query}));
+    state.tab='zoeken';
+  } catch(err) {
+    state.fout = 'Kon geen recepten ophalen: ' + err.message;
+  } finally {
+    state.laden=false; render();
+  }
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+function openEdit(id) {
+  const r = state.recepten.find(x=>x.id===id);
+  if(!r) return;
+  state.editId=id;
+  state.modalCats=[...(r.categorieen||[])];
+  state.modalTags=[...(r.tags||[])];
+  document.getElementById('modal-title').textContent='✏️ '+r.titel;
+  document.getElementById('modal-notities').value=r.notities||'';
+
+  // Categorie knoppen
+  const mc=document.getElementById('modal-cats');
+  mc.innerHTML=CATEGORIEEN.map(c=>`<button class="cat-btn${state.modalCats.includes(c)?' active':''}" onclick="toggleModalCat('${c}')">${escH(c)}</button>`).join('');
+
+  // Tags
+  renderModalTags();
+  document.getElementById('modal-tag-input').value='';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function toggleModalCat(c) {
+  if(state.modalCats.includes(c)) state.modalCats=state.modalCats.filter(x=>x!==c); else state.modalCats.push(c);
+  document.querySelectorAll('.cat-btn').forEach(b=>{ b.classList.toggle('active',state.modalCats.includes(b.textContent)); });
+}
+function renderModalTags() {
+  document.getElementById('modal-tags').innerHTML=state.modalTags.map((t,i)=>
+    `<span class="badge tag">${escH(t)}<span class="badge-remove" onclick="removeModalTag(${i})">✕</span></span>`).join('');
+}
+function removeModalTag(i) { state.modalTags.splice(i,1); renderModalTags(); }
+function addModalTag() {
+  const inp=document.getElementById('modal-tag-input');
+  const t=inp.value.trim();
+  if(t&&!state.modalTags.includes(t)) { state.modalTags.push(t); renderModalTags(); }
+  inp.value='';
+}
+function slaModalOp() {
+  const r=state.recepten.find(x=>x.id===state.editId);
+  if(!r) return;
+  r.categorieen=state.modalCats;
+  r.tags=state.modalTags;
+  r.notities=document.getElementById('modal-notities').value;
+  save(); sluitModal(); render();
+}
+function sluitModal() { document.getElementById('modal-overlay').classList.remove('open'); state.editId=null; }
+function closeModal(e) { if(e.target===document.getElementById('modal-overlay')) sluitModal(); }
+
+// ── HTML builders ─────────────────────────────────────────────────────────────
+function buildBadges(cats,tags) {
+  return `<div class="badges">
+    ${(cats||[]).map(c=>`<span class="badge">${escH(c)}</span>`).join('')}
+    ${(tags||[]).map(t=>`<span class="badge tag">${escH(t)}</span>`).join('')}
+  </div>`;
+}
+function buildStars(rating,id) {
+  return `<div class="stars">${[1,2,3,4,5].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">★</span>`).join('')}</div>`;
+}
+function buildCard(r, personen, opts={}) {
+  const {opslaan,idx,showSelect,showEdit,showDelete}=opts;
+  const sel = state.geselecteerd.includes(r.id);
+  const factor = personen/(r.personen||4);
+  const ings = (r.ingredienten||[]).map(ing=>`<li><strong>${schaal(ing.hoeveelheid,r.personen||4,personen)} ${escH(ing.eenheid)}</strong> ${escH(ing.naam)}</li>`).join('');
+  const staps = (r.stappen||[]).map(s=>`<li>${escH(s)}</li>`).join('');
+  const cardId = 'card-'+r.id.replace(/[^a-z0-9]/gi,'-');
+
+  return `<div class="card${sel?' selected':''}" id="${cardId}">
+    ${sel?`<div class="check-badge">✓</div>`:''}
+    <div class="card-body">
+      ${buildBadges(r.categorieen,r.tags)}
+      <h3 class="card-title">${escH(r.titel)}</h3>
+      <p class="card-desc">${escH(r.omschrijving)}</p>
+      ${r.notities?`<p class="card-note">📝 ${escH(r.notities)}</p>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        ${buildStars(r.rating||0,r.id)}
+        <span style="font-size:12px;color:#9c8060">🍽 ${personen} pers.</span>
+      </div>
+    </div>
+    <div class="card-toggle" onclick="toggleDetail('${cardId}')">
+      <span>Recept bekijken</span><span class="toggle-arrow">▼</span>
+    </div>
+    <div class="card-detail" id="detail-${cardId}">
+      <h4>Ingrediënten</h4>
+      <ul>${ings}</ul>
+      <h4>Bereiding</h4>
+      <ol>${staps}</ol>
+      ${r.bron?`<a class="bron-link" href="${escH(r.bron)}" target="_blank" rel="noopener">Origineel recept →</a>`:''}
+    </div>
+    <div class="card-actions">
+      ${opslaan?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-orange'}" onclick="slaOp(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
+      ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️</button>`:''}
+      ${showSelect?`<button class="btn ${sel?'btn-deselect':'btn-primary'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
+      ${showDelete?`<button class="btn btn-ghost" onclick="verwijder('${r.id}')">🗑</button>`:''}
+    </div>
+  </div>`;
+}
+function toggleDetail(cardId) {
+  const d=document.getElementById('detail-'+cardId);
+  const t=d.previousElementSibling;
+  d.classList.toggle('open');
+  t.querySelector('.toggle-arrow').textContent=d.classList.contains('open')?'▲':'▼';
+}
+
+// ── Render tabs ───────────────────────────────────────────────────────────────
+function renderRecepten() {
+  const zoekterm = (document.getElementById('zoek-input')||{}).value||state.zoekterm||'';
+  const gefilterd = state.recepten.filter(r=>{
+    const cm = state.filterCat==='Alle'||(r.categorieen||[]).includes(state.filterCat)||(r.tags||[]).includes(state.filterCat);
+    const zm = !zoekterm||r.titel.toLowerCase().includes(zoekterm.toLowerCase())||(r.tags||[]).some(t=>t.toLowerCase().includes(zoekterm.toLowerCase()));
+    return cm&&zm;
+  });
+  const allCats=['Alle',...CATEGORIEEN];
+  return `
+    <div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap">
+      <input id="zoek-input" class="input" style="flex:1;min-width:130px" placeholder="Zoek op naam of tag..." value="${escH(state.zoekterm)}" oninput="state.zoekterm=this.value;renderInPlace()">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;color:#7a5c35">🍽</span>
+        <input type="number" class="input" style="width:44px;text-align:center;padding:9px 5px" min="1" max="20" value="${state.personen}" onchange="setPersonen(this.value)">
+      </div>
+    </div>
+    <div id="filter-bar">${allCats.map(c=>`<button class="filter-btn${c===state.filterCat?' active':''}" onclick="setFilterCat('${c}')">${escH(c)}</button>`).join('')}</div>
+    ${gefilterd.length===0?'<p class="empty">Geen recepten gevonden. Ga naar "Ontdekken" om recepten toe te voegen.</p>':
+      gefilterd.map(r=>buildCard(r,state.personen,{showSelect:true,showEdit:true,showDelete:true})).join('')}
+  `;
+}
+
+function renderZoeken() {
+  return `
+    <div class="search-box">
+      <div class="mode-btns">
+        <button class="mode-btn${state.zoekModus==='term'?' active':''}" onclick="setZoekModus('term')">Zoekterm</button>
+        <button class="mode-btn${state.zoekModus==='url'?' active':''}" onclick="setZoekModus('url')">URL plakken</button>
+      </div>
+      ${state.zoekModus==='term'
+        ?`<input id="input-term" class="input" style="width:100%" placeholder="Bijv. 'pasta pesto' of 'snel vegetarisch'" value="${escH(state.zoekInput)}" onkeydown="if(event.key==='Enter')zoek()">`
+        :`<input id="input-url" class="input" style="width:100%" placeholder="https://www.lekkerensimpel.com/recept/..." value="${escH(state.zoekUrl)}" onkeydown="if(event.key==='Enter')zoek()">
+          <p class="search-hint">Werkt met lekkerensimpel.com, chickslovefood.com, allerhande.nl en meer.</p>`
+      }
+      <button class="btn-search" onclick="zoek()" ${state.laden?'disabled':''}>${state.laden?'Recepten ophalen...':'Zoeken →'}</button>
+    </div>
+    ${state.fout?`<div class="box-error">${escH(state.fout)}</div>`:''}
+    ${state.resultaten.length>0
+      ?`<p class="section-label" style="margin-bottom:11px">${state.resultaten.length} recept${state.resultaten.length===1?'':'en'} gevonden:</p>`+
+        state.resultaten.map((r,i)=>buildCard(r,state.personen,{opslaan:true,idx:i})).join('')
+      :(!state.laden?`<p class="hint">Zoek op gerecht of keuken, of plak de URL van een recept.</p>`:'')
+    }
+  `;
+}
+
+function renderWeekmenu() {
+  const sel = state.recepten.filter(r=>state.geselecteerd.includes(r.id));
+  return `
+    <div class="box-info">Kies 2 recepten via "Mijn Recepten".</div>
+    ${sel.length===0?`<p class="empty">Geen recepten geselecteerd. Ga naar "Mijn Recepten" en kies er 2.</p>`:`
+      <div class="progress-bar">${[1,2].map(n=>`<div class="progress-segment${sel.length>=n?' done':''}"></div>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+        <span style="font-size:13px;color:#7a5c35">Personen:</span>
+        <input type="number" class="input" style="width:50px;text-align:center" min="1" max="20" value="${state.personen}" onchange="setPersonen(this.value)">
+      </div>
+      ${sel.map(r=>buildCard(r,state.personen,{showSelect:true,showEdit:true})).join('')}
+      ${sel.length===2?`<button class="btn btn-primary" style="width:100%;margin-top:14px;padding:13px 0;font-size:14px" onclick="setTab('boodschappen')">Boodschappenlijst maken →</button>`:''}
+    `}
+  `;
+}
+
+function renderBoodschappen() {
+  const sel = state.recepten.filter(r=>state.geselecteerd.includes(r.id));
+  if(sel.length===0) return `<p class="empty">Selecteer eerst 2 recepten in "Weekmenu".</p>`;
+
+  // Bouw ingrediëntenlijst
+  const map={};
+  sel.forEach(r=>{
+    (r.ingredienten||[]).forEach(ing=>{
+      const k=ing.naam.toLowerCase().trim();
+      const h=parseFloat((ing.hoeveelheid*(state.personen/(r.personen||4))).toFixed(1));
+      const uk=map[k]&&map[k].eenheid!==ing.eenheid?k+'_'+ing.eenheid:k;
+      if(map[uk]&&map[uk].eenheid===ing.eenheid) map[uk].hoeveelheid=parseFloat((map[uk].hoeveelheid+h).toFixed(1));
+      else map[uk]={naam:ing.naam,hoeveelheid:h,eenheid:ing.eenheid,checked:false,afdeling:getAfdeling(ing.naam)};
+    });
+  });
+  const items=Object.values(map);
+  const klaar=items.filter(i=>i.checked).length;
+
+  const groepen=AFDELINGEN.map(a=>({...a,items:items.filter(i=>i.afdeling===a.naam)})).filter(g=>g.items.length>0);
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">
+      <h2 style="font-family:'Playfair Display',serif;font-size:18px;color:#2d1f0e">Boodschappenlijst</h2>
+      <div style="display:flex;align-items:center;gap:7px">
+        <span style="font-size:12px;color:#7a5c35">Personen:</span>
+        <input type="number" class="input" style="width:44px;text-align:center;padding:6px 7px" min="1" max="20" value="${state.personen}" onchange="setPersonen(this.value)">
+      </div>
+    </div>
+    <div class="box-info" style="display:flex;justify-content:space-between">
+      <span>${sel.map(r=>escH(r.titel)).join(' · ')}</span>
+      <span style="color:#9c8060">${klaar}/${items.length} afgevinkt</span>
+    </div>
+    <div id="shop-list">
+      ${groepen.map(g=>`
+        <div style="margin-bottom:14px">
+          <div class="afdeling-header">
+            <span class="afdeling-title">${g.naam}</span>
+            <div class="afdeling-line"></div>
+            <span class="afdeling-count">${g.items.filter(i=>i.checked).length}/${g.items.length}</span>
+          </div>
+          ${g.items.map((item,i)=>{
+            const globalIdx=items.indexOf(item);
+            return `<div class="shop-item${item.checked?' checked':''}" style="background:${item.checked?'#f0ebe0':g.kleur}" onclick="toggleShopItem(${globalIdx})">
+              <div class="shop-checkbox${item.checked?' checked':''}">${item.checked?'<span style="color:white;font-size:11px">✓</span>':''}</div>
+              <span class="shop-name${item.checked?' checked':''}">${escH(item.naam)}</span>
+              <span class="shop-qty">${item.hoeveelheid} ${escH(item.eenheid)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Bewaar shop state tussen renders
+let shopItems = [];
+function toggleShopItem(idx) {
+  if(!shopItems[idx]) return;
+  shopItems[idx].checked=!shopItems[idx].checked;
+  renderInPlace();
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function render() {
+  // Header
+  document.getElementById('header-sub').textContent=`${state.recepten.length} recepten · ${state.geselecteerd.length}/2 gekozen voor deze week`;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const tabs=['recepten','zoeken','weekmenu','boodschappen'];
+    b.classList.toggle('active',tabs[i]===state.tab);
+  });
+
+  // Content
+  let html='';
+  if(state.tab==='recepten') html=renderRecepten();
+  else if(state.tab==='zoeken') html=renderZoeken();
+  else if(state.tab==='weekmenu') html=renderWeekmenu();
+  else if(state.tab==='boodschappen') html=renderBoodschappen();
+  document.getElementById('content').innerHTML=html;
+}
+
+function renderInPlace() {
+  // Herrender zonder scroll reset
+  const scrollY=window.scrollY;
+  render();
+  window.scrollTo(0,scrollY);
+}
+</script>
 </body>
 </html>
