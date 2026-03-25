@@ -266,7 +266,7 @@ function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;
 function delRec(id){S.recepten=S.recepten.filter(r=>r.id!==id);S.geselecteerd=S.geselecteerd.filter(x=>x!==id);delete S.weekPers[id];sav();render();}
 function saveRes(idx){
   const r=S.resultaten[idx];if(!r)return;
-  const n={...r,opgeslagen:true,datum:new Date().toISOString().split('T')[0],tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||''};
+  const n={...r,opgeslagen:true,datum:new Date().toISOString().split('T')[0],tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',afbeelding:r.afbeelding||''};
   const i=S.recepten.findIndex(x=>x.id===n.id);
   if(i>=0)S.recepten[i]=n;else S.recepten.push(n);
   S.resultaten[idx]={...S.resultaten[idx],opgeslagen:true};
@@ -322,16 +322,15 @@ function extractJSON(txt){
   }
 }
 
-const SYS=`Je bent een nauwkeurige receptassistent. Geef ALLEEN een pure JSON array terug zonder enige tekst eromheen, zonder markdown backticks, zonder uitleg. Begin direct met [ en eindig met ].
-Formaat per recept exact zo:
-{"id":"unieke-slug-zonder-spaties","titel":"string","omschrijving":"max 2 zinnen","personen":4,"ingredienten":[{"naam":"string","hoeveelheid":1,"eenheid":"string"}],"stappen":["string"],"keuken":"string","categorie":"string","tags":[],"notities":"","bron":"string","rating":0,"opgeslagen":false,"datum":"DATUM"}
-Keuken (1 waarde of leeg): Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet
-Categorie (1 waarde of leeg): Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep
-Neem ingrediënten en stappen LETTERLIJK over. Geen toevoegingen. Alle tekst in het Nederlands.`;
+const SYS=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
+Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
+Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+Ingrediënten en stappen letterlijk overnemen. Nederlands. Bron: echte werkende URL van de receptpagina.`;
 
 async function callAPI(messages,search=false){
   const sys=SYS.replace('DATUM',new Date().toISOString().split('T')[0]);
-  const body={model:"claude-sonnet-4-20250514",max_tokens:3000,system:sys,messages};
+  const body={model:"claude-sonnet-4-20250514",max_tokens:1200,system:sys,messages};
   if(search)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!resp.ok)throw new Error('API fout: '+resp.status);
@@ -355,12 +354,16 @@ async function zoek(){
       if(!pr.ok){const e=await pr.json().catch(()=>({}));throw new Error(e?.error||'Kon pagina niet ophalen');}
       const pd=await pr.json();
       if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
-      parsed=await callAPI([{role:'user',content:`Haal het recept uit deze paginatekst en geef het als JSON array met 1 recept. URL was: ${q}\n\nPaginatekst:\n${pd.text.slice(0,6000)}`}]);
+      parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${q}\n\n${pd.text.slice(0,4000)}`}]);
+      // Voeg proxy-afbeelding toe als Claude er geen heeft gevonden
+      if(pd.image&&parsed[0]&&!parsed[0].afbeelding){
+        parsed[0].afbeelding=pd.image;
+      }
     }else{
-      parsed=await callAPI([{role:'user',content:`Zoek online naar 3 lekkere recepten voor: "${q}". Zoek op echte receptsites. Neem ingrediënten en stappen letterlijk over uit het gevonden recept. Geef terug als JSON array.`}],true);
+      parsed=await callAPI([{role:'user',content:`Zoek 3 vegetarische recepten voor: "${q}". Geef echte werkende bronlinks. JSON array.`}],true);
     }
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recepten gevonden');
-    S.resultaten=parsed.map(r=>({...r,id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',bron:r.bron||q}));
+    S.resultaten=parsed.map(r=>({...r,id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',afbeelding:r.afbeelding||'',bron:r.bron||q}));
     S.tab='zoeken';
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
@@ -369,12 +372,10 @@ async function zoek(){
 async function suggestie(){
   S.sugLaden=true;S.fout='';S.resultaten=[];render();
   try{
-    const prompt=`Zoek 3 lekkere vegetarische recepten op allerhande.nl, leukerecepten.nl, 24kitchen.nl of chickslovefood.com.
-Eisen: geen vlees, maximaal 12 ingrediënten, voor 4 personen, maximaal 45 minuten bereidingstijd.
-Neem ingrediënten en stappen LETTERLIJK over van de site. Geef terug als JSON array.`;
+    const prompt=`Zoek 3 vegetarische recepten op allerhande.nl, chickslovefood.com of lekkerensimpel.com. Max 12 ingrediënten, 4 personen, max 45 min. Neem ingrediënten en stappen letterlijk over. Geef echte werkende bronlinks. JSON array.`;
     const parsed=await callAPI([{role:'user',content:prompt}],true);
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen suggesties gevonden');
-    S.resultaten=parsed.map(r=>({...r,id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||''}));
+    S.resultaten=parsed.map(r=>({...r,id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',afbeelding:r.afbeelding||''}));
     S.tab='zoeken';
   }catch(e){S.fout=e.message;}
   finally{S.sugLaden=false;render();}
@@ -435,7 +436,9 @@ function buildCard(r,opts={}){
   const cid='c'+r.id.replace(/[^a-z0-9]/gi,'-');
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
     ${sel?'<div class="sel-badge">✓</div>':''}
-    <div class="rcard-img"><span class="rcard-img-emoji">${getEmoji(r)}</span></div>
+    <div class="rcard-img">${r.afbeelding
+      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
+      :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}</div>
     <div class="rcard-body">
       ${buildLabels(r)}
       <div class="rcard-title">${h(r.titel)}</div>
