@@ -207,7 +207,15 @@ textarea.inp{resize:vertical}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const DB=supabase.createClient(
+  'https://mlbhngkmkaorvvkepwvo.supabase.co',
+  'sb_publishable_kdnrLxPrEzxZatNFaUMA1A_c89tCL9l'
+);
+const USER_ID='6bbada61-f0dc-40e4-b2de-354ecd61c5c6';
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const SK='rij-v6';
 const KEUKEN=['Italiaans','Aziatisch','Mexicaans','Indiaas','Midden-Oosters','Frans','Nederlands','Zoet'];
@@ -246,12 +254,51 @@ let S={
 };
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-function sav(){try{localStorage.setItem(SK+'-r',JSON.stringify(S.recepten));localStorage.setItem(SK+'-s',JSON.stringify(S.geselecteerd));localStorage.setItem(SK+'-p',JSON.stringify(S.weekPers));localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}}
-function lod(){
-  try{const v=localStorage.getItem(SK+'-r');S.recepten=v?JSON.parse(v):DEMO;}catch{S.recepten=DEMO;}
+function sav(){
+  try{
+    localStorage.setItem(SK+'-s',JSON.stringify(S.geselecteerd));
+    localStorage.setItem(SK+'-p',JSON.stringify(S.weekPers));
+    localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));
+  }catch(e){}
+}
+
+function toSB(r){
+  return{
+    id:r.id,user_id:USER_ID,
+    title:r.titel,description:r.omschrijving||'',
+    image_url:r.afbeelding||null,source_url:r.bron||null,
+    ingredients:r.ingredienten||[],instructions:r.stappen||[],
+    cuisine:r.keuken||null,category:r.categorie||null,
+    tags:r.tags||[],servings:r.personen||4,
+    rating:r.rating||null,notes:r.notities||null,
+    is_public:false,
+  };
+}
+function fromSB(row){
+  return{
+    id:row.id,titel:row.title,omschrijving:row.description||'',
+    afbeelding:row.image_url||'',bron:row.source_url||'',
+    ingredienten:row.ingredients||[],stappen:row.instructions||[],
+    keuken:row.cuisine||'',categorie:row.category||'',
+    tags:row.tags||[],personen:row.servings||4,
+    rating:row.rating||0,notities:row.notes||'',
+    opgeslagen:true,datum:row.created_at?row.created_at.split('T')[0]:'',
+  };
+}
+async function savRecept(r){
+  const{error}=await DB.from('recipes').upsert(toSB(r));
+  if(error)console.error('Opslaan mislukt:',error.message);
+}
+async function loadRecepten(){
+  const{data,error}=await DB.from('recipes').select('*').order('created_at',{ascending:false});
+  if(error){console.error('Laden mislukt:',error.message);S.recepten=DEMO;return;}
+  S.recepten=data.length>0?data.map(fromSB):DEMO;
+}
+async function lod(){
   try{const v=localStorage.getItem(SK+'-s');if(v)S.geselecteerd=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-p');if(v)S.weekPers=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
+  await loadRecepten();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -262,15 +309,16 @@ function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken]
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
 function setTab(t){S.tab=t;S.fout='';render();}
-function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;sav();render();}}
-function delRec(id){S.recepten=S.recepten.filter(r=>r.id!==id);S.geselecteerd=S.geselecteerd.filter(x=>x!==id);delete S.weekPers[id];sav();render();}
-function saveRes(idx){
+async function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;render();await savRecept(r);}}
+async function delRec(id){S.recepten=S.recepten.filter(r=>r.id!==id);S.geselecteerd=S.geselecteerd.filter(x=>x!==id);delete S.weekPers[id];sav();render();await DB.from('recipes').delete().eq('id',id);}
+async function saveRes(idx){
   const r=S.resultaten[idx];if(!r)return;
   const n={...r,opgeslagen:true,datum:new Date().toISOString().split('T')[0],tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',afbeelding:r.afbeelding||''};
   const i=S.recepten.findIndex(x=>x.id===n.id);
   if(i>=0)S.recepten[i]=n;else S.recepten.push(n);
   S.resultaten[idx]={...S.resultaten[idx],opgeslagen:true};
-  sav();render();
+  render();
+  await savRecept(n);
 }
 function toggleSel(id){
   if(S.geselecteerd.includes(id))S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
@@ -298,7 +346,7 @@ function tMC(c){S.mC=S.mC===c?'':c;document.querySelectorAll('#m-c .cat-btn').fo
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
 function rmMT(i){S.mTags.splice(i,1);rMT();}
 function addMTag(){const inp=document.getElementById('m-ti'),t=inp.value.trim();if(t&&!S.mTags.includes(t)){S.mTags.push(t);rMT();}inp.value='';}
-function saveModal(){const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.notities=document.getElementById('m-n').value;sav();sluitModal();render();}
+async function saveModal(){const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.notities=document.getElementById('m-n').value;sluitModal();render();await savRecept(r);}
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;}
 function closeOvl(e){if(e.target===document.getElementById('mov'))sluitModal();}
 
@@ -599,7 +647,12 @@ function render(){
   document.getElementById('content').innerHTML=html;
 }
 function rIP(){const y=window.scrollY;render();window.scrollTo(0,y);}
-window.addEventListener('DOMContentLoaded',()=>{lod();render();});
+window.addEventListener('DOMContentLoaded',async()=>{
+  const{data:{session}}=await DB.auth.getSession();
+  if(!session)await DB.auth.signInWithPassword({email:'test@rijnsburgje.nl',password:'Poepdoos123?!'});
+  await lod();
+  render();
+});
 </script>
 </body>
 </html>
