@@ -377,8 +377,16 @@ Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zo
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
 Ingrediënten en stappen letterlijk overnemen. Nederlands. Bron: echte werkende URL van de receptpagina.`;
 
-async function callAPI(messages,search=false,maxTokens=1200){
-  const sys=SYS.replace('DATUM',new Date().toISOString().split('T')[0]);
+const SYS_FOTO=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
+Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
+Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+LETTERLIJK OVERNEMEN: kopieer ingrediënten en stappen exact zoals aangeleverd. Niets weglaten, niets toevoegen.
+NOOIT VERZINNEN: als een hoeveelheid vaag is (bijv. "handjevol", "naar smaak", "flinke scheut"), zet de beschrijving in naam en gebruik hoeveelheid 1 en eenheid "x".
+Datum: gebruik DATUM.`;
+
+async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
+  const sys=(sysOverride||SYS).replace('DATUM',new Date().toISOString().split('T')[0]);
   const body={model:"claude-sonnet-4-20250514",max_tokens:maxTokens,system:sys,messages};
   if(search)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -445,10 +453,27 @@ async function verwerkFoto(input){
       reader.onerror=rej;
       reader.readAsDataURL(file);
     });
-    const parsed=await callAPI([{role:'user',content:[
-      {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
-      {type:'text',text:'Haal het recept uit deze afbeelding. Geef JSON array met 1 recept.'},
-    ]}],false,2000);
+
+    // Stap 1: letterlijke transcriptie van de afbeelding
+    const r1=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:1500,
+      system:'Jij bent een nauwkeurige tekst-transcriptor. Schrijf precies over wat je ziet. Kopieer alle tekst letterlijk. Verander niets, voeg niets toe, laat niets weg. Als iets onleesbaar is, schrijf [onleesbaar].',
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
+        {type:'text',text:'Transcribeer alle tekst die je ziet: titel, ingrediënten met hoeveelheden, en bereidingsstappen. Alles letterlijk.'},
+      ]}],
+    })});
+    if(!r1.ok)throw new Error('API fout: '+r1.status);
+    const d1=await r1.json();
+    if(d1.error)throw new Error(d1.error.message||'API fout');
+    const transcriptie=(d1.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if(!transcriptie)throw new Error('Kon de afbeelding niet lezen');
+
+    // Stap 2: transcriptie omzetten naar JSON (zonder te verzinnen)
+    const parsed=await callAPI(
+      [{role:'user',content:`Zet dit recept om naar JSON. Neem ingrediënten en stappen LETTERLIJK over. Verzin niets.\n\n${transcriptie}`}],
+      false,2000,SYS_FOTO
+    );
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden in de afbeelding');
     S.resultaten=normaliseer(parsed,'');
     if(S.resultaten[0])S.resultaten[0].afbeelding=fotoUrl;
