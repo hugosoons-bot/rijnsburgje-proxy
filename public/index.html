@@ -381,8 +381,11 @@ const SYS_FOTO=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Beg
 Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
-LETTERLIJK OVERNEMEN: kopieer ingrediënten en stappen exact zoals aangeleverd. Niets weglaten, niets toevoegen.
-NOOIT VERZINNEN: als een hoeveelheid vaag is (bijv. "handjevol", "naar smaak", "flinke scheut"), zet de beschrijving in naam en gebruik hoeveelheid 1 en eenheid "x".
+REGELS — verplicht:
+1. Neem ingrediënten en stappen LETTERLIJK over uit de transcriptie. Geen parafrasering.
+2. Vage hoeveelheden ("handjevol", "naar smaak", "scheut"): zet volledige omschrijving in naam, hoeveelheid=1, eenheid="x".
+3. Onleesbare tekst: neem "[ONLEESBAAR]" letterlijk op in het naam- of stap-veld. Nooit gokken.
+4. VERIFICATIE voor je de JSON afrondt: loop elk ingrediënt en elke stap na. Staat het aantoonbaar in de transcriptie? Zo niet — verwijder het. Voeg nooit iets toe dat niet in de transcriptie staat.
 Datum: gebruik DATUM.`;
 
 async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
@@ -456,11 +459,24 @@ async function verwerkFoto(input){
 
     // Stap 1: letterlijke transcriptie van de afbeelding
     const r1=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',max_tokens:1500,
-      system:'Jij bent een nauwkeurige tekst-transcriptor. Schrijf precies over wat je ziet. Kopieer alle tekst letterlijk. Verander niets, voeg niets toe, laat niets weg. Als iets onleesbaar is, schrijf [onleesbaar].',
+      model:'claude-sonnet-4-20250514',max_tokens:2000,
+      system:`Jij bent een expert in het uitlezen van receptpagina's uit foto's.
+
+STAP 1 — ANALYSEER DE PAGINA EERST:
+- Bepaal de oriëntatie (rechtop, 90° gedraaid, ondersteboven). Corrigeer mentaal voor rotatie voordat je transcribeert.
+- Identificeer alle secties: titel, voor hoeveel personen, ingrediëntenlijst(en), bereidingsstappen.
+- Let op de lay-out: ingrediënten kunnen links staan en stappen rechts, of alles verticaal, of in meerdere kolommen.
+- Ingrediënten kunnen gesplitst zijn per onderdeel (bijv. "Voor de saus:", "Voor het deeg:") — neem alle groepen mee.
+- Bereidingsstappen kunnen genummerd zijn, als bullets, of als doorlopende tekst — neem alles mee.
+
+STAP 2 — TRANSCRIBEER LETTERLIJK:
+- Schrijf alle relevante tekst over, exact zoals je die ziet.
+- Behoud de structuur en groepering.
+- Als iets onleesbaar is: schrijf [ONLEESBAAR]. Gok nooit.
+- Voeg NIETS toe. Laat NIETS weg. Verzin NIETS.`,
       messages:[{role:'user',content:[
         {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
-        {type:'text',text:'Transcribeer alle tekst die je ziet: titel, ingrediënten met hoeveelheden, en bereidingsstappen. Alles letterlijk.'},
+        {type:'text',text:'Analyseer de pagina-opmaak en transcribeer daarna alle tekst letterlijk: titel, aantal personen, alle ingrediënten met hoeveelheden (inclusief gesplitste lijsten per component), en alle bereidingsstappen.'},
       ]}],
     })});
     if(!r1.ok)throw new Error('API fout: '+r1.status);
@@ -537,7 +553,7 @@ function buildCard(r,opts={}){
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
     ${sel?'<div class="sel-badge">✓</div>':''}
     <div class="rcard-img">${r.afbeelding
-      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
+      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:${r.afbeelding.startsWith('blob:')?'contain':'cover'};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}</div>
     <div class="rcard-body">
       ${buildLabels(r)}
