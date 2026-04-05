@@ -267,7 +267,7 @@ function toSB(r){
   return{
     id:r.id,user_id:USER_ID,
     title:r.titel,description:r.omschrijving||'',
-    image_url:r.afbeelding||null,source_url:r.bron||null,
+    image_url:r.afbeelding&&!r.afbeelding.startsWith('blob:')?r.afbeelding:null,source_url:r.bron||null,
     ingredients:r.ingredienten||[],instructions:r.stappen||[],
     cuisine:r.keuken||null,category:r.categorie||null,
     tags:r.tags||[],servings:r.personen||4,
@@ -427,7 +427,7 @@ async function zoekUrl(){
     const pd=await pr.json();
     if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
     const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${q}\n\n${pd.text.slice(0,4000)}`}]);
-    if(pd.image&&parsed[0]&&!parsed[0].afbeelding)parsed[0].afbeelding=pd.image;
+    if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,q);
   }catch(e){S.fout=e.message;}
@@ -438,6 +438,7 @@ async function verwerkFoto(input){
   const file=input.files[0];if(!file)return;
   S.laden=true;S.fout='';S.resultaten=[];render();
   try{
+    const fotoUrl=URL.createObjectURL(file);
     const base64=await new Promise((res,rej)=>{
       const reader=new FileReader();
       reader.onload=e=>res(e.target.result.split(',')[1]);
@@ -450,6 +451,7 @@ async function verwerkFoto(input){
     ]}],false,2000);
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden in de afbeelding');
     S.resultaten=normaliseer(parsed,'');
+    if(S.resultaten[0])S.resultaten[0].afbeelding=fotoUrl;
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
 }
