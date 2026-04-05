@@ -457,39 +457,11 @@ async function verwerkFoto(input){
       reader.readAsDataURL(file);
     });
 
-    // Stap 1: letterlijke transcriptie van de afbeelding
-    const r1=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',max_tokens:2000,
-      system:`Jij bent een expert in het uitlezen van receptpagina's uit foto's.
+    const parsed=await callAPI([{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
+      {type:'text',text:'Lees dit recept visueel uit de afbeelding. Verwerk gedraaide tekst en meerdere kolommen correct. Haal alle ingrediënten met hoeveelheden en alle bereidingsstappen eruit. Geef JSON array met 1 recept.'},
+    ]}],false,2000,SYS_FOTO);
 
-STAP 1 — ANALYSEER DE PAGINA EERST:
-- Bepaal de oriëntatie (rechtop, 90° gedraaid, ondersteboven). Corrigeer mentaal voor rotatie voordat je transcribeert.
-- Identificeer alle secties: titel, voor hoeveel personen, ingrediëntenlijst(en), bereidingsstappen.
-- Let op de lay-out: ingrediënten kunnen links staan en stappen rechts, of alles verticaal, of in meerdere kolommen.
-- Ingrediënten kunnen gesplitst zijn per onderdeel (bijv. "Voor de saus:", "Voor het deeg:") — neem alle groepen mee.
-- Bereidingsstappen kunnen genummerd zijn, als bullets, of als doorlopende tekst — neem alles mee.
-
-STAP 2 — TRANSCRIBEER LETTERLIJK:
-- Schrijf alle relevante tekst over, exact zoals je die ziet.
-- Behoud de structuur en groepering.
-- Als iets onleesbaar is: schrijf [ONLEESBAAR]. Gok nooit.
-- Voeg NIETS toe. Laat NIETS weg. Verzin NIETS.`,
-      messages:[{role:'user',content:[
-        {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
-        {type:'text',text:'Analyseer de pagina-opmaak en transcribeer daarna alle tekst letterlijk: titel, aantal personen, alle ingrediënten met hoeveelheden (inclusief gesplitste lijsten per component), en alle bereidingsstappen.'},
-      ]}],
-    })});
-    if(!r1.ok)throw new Error('API fout: '+r1.status);
-    const d1=await r1.json();
-    if(d1.error)throw new Error(d1.error.message||'API fout');
-    const transcriptie=(d1.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    if(!transcriptie)throw new Error('Kon de afbeelding niet lezen');
-
-    // Stap 2: transcriptie omzetten naar JSON (zonder te verzinnen)
-    const parsed=await callAPI(
-      [{role:'user',content:`Zet dit recept om naar JSON. Neem ingrediënten en stappen LETTERLIJK over. Verzin niets.\n\n${transcriptie}`}],
-      false,2000,SYS_FOTO
-    );
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden in de afbeelding');
     S.resultaten=normaliseer(parsed,'');
     if(S.resultaten[0])S.resultaten[0].afbeelding=fotoUrl;
