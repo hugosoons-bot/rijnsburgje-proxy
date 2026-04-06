@@ -248,7 +248,7 @@ let S={
   fK:'Alle',fC:'Alle',hideNNEK:false,zoekterm:'',
   scherm:'laden',gebruiker:null,profiel:null,
   authTab:'login',authFout:'',authLaden:false,
-  menuId:null,
+  menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
@@ -297,6 +297,7 @@ async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   await loadRecepten();
   await laadWeekmenu();
+  await laadBoodschappen();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -527,23 +528,88 @@ function bouwShop(){
   items.forEach(ni=>{const o=S.shopItems.find(x=>x.naam.toLowerCase()===ni.naam.toLowerCase()&&x.eenheid===ni.eenheid&&!x.extra);if(o)ni.done=o.done;});
   S.shopItems=[...items,...S.extraItems.map(e=>({...e,afd:e.afd||getAfd(e.naam)}))];
 }
-function toggleShop(idx){if(S.shopItems[idx]!==undefined){S.shopItems[idx].done=!S.shopItems[idx].done;}rIP();}
+async function maakBoodschappenlijst(){
+  bouwShop();setTab('boodschappen');
+  if(S.gebruiker&&S.menuId)await slaBoodschappenlijstOp();
+}
+async function slaBoodschappenlijstOp(){
+  const{data:bestaand}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',S.menuId).maybeSingle();
+  let lijstId;
+  if(bestaand){
+    lijstId=bestaand.id;
+    await DB.from('shopping_items').delete().eq('list_id',lijstId);
+  }else{
+    const{data:nieuw,error}=await DB.from('shopping_lists').insert({user_id:S.gebruiker.id,menu_id:S.menuId}).select('id').single();
+    if(error){console.error(error.message);return;}
+    lijstId=nieuw.id;
+  }
+  S.lijstId=lijstId;
+  if(S.shopItems.length>0){
+    await DB.from('shopping_items').insert(S.shopItems.map((item,i)=>({
+      list_id:lijstId,name:item.naam,
+      amount:`${item.hoeveelheid}${item.eenheid?' '+item.eenheid:''}`,
+      department:item.afd||'Overig',is_checked:item.done||false,
+      sort_order:item.extra?1000+i:i,
+    })));
+  }
+  await herlaadBoodschappen(lijstId);
+  abonneer(lijstId);
+}
+async function herlaadBoodschappen(lijstId){
+  const{data}=await DB.from('shopping_items').select('*').eq('list_id',lijstId).order('sort_order');
+  if(!data)return;
+  S.shopItems=data.map(i=>{
+    const m=(i.amount||'').match(/^([\d.]+)\s*(.*)$/);
+    return{naam:i.name,hoeveelheid:m?parseFloat(m[1]):1,eenheid:m?(m[2]||'').trim():'',done:i.is_checked,extra:i.sort_order>=1000,afd:i.department||'Overig',sbId:i.id};
+  });
+  S.extraItems=S.shopItems.filter(i=>i.extra);
+  rIP();
+}
+async function laadBoodschappen(){
+  if(!S.gebruiker||!S.menuId)return;
+  const{data:list}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',S.menuId).maybeSingle();
+  if(!list)return;
+  S.lijstId=list.id;
+  await herlaadBoodschappen(list.id);
+  abonneer(list.id);
+}
+let realtimeSub=null;
+function abonneer(lijstId){
+  if(realtimeSub){DB.removeChannel(realtimeSub);realtimeSub=null;}
+  realtimeSub=DB.channel('lijst-'+lijstId)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'shopping_items',filter:`list_id=eq.${lijstId}`},
+      payload=>{const item=S.shopItems.find(i=>i.sbId===payload.new.id);if(item){item.done=payload.new.is_checked;rIP();}}
+    ).subscribe();
+}
+function toggleShop(idx){
+  if(S.shopItems[idx]===undefined)return;
+  S.shopItems[idx].done=!S.shopItems[idx].done;
+  const sbId=S.shopItems[idx].sbId;
+  if(sbId)DB.from('shopping_items').update({is_checked:S.shopItems[idx].done}).eq('id',sbId).then(({error})=>{if(error)console.error(error.message);});
+  rIP();
+}
 function delShop(idx){
   const item=S.shopItems[idx];
+  if(item?.sbId)DB.from('shopping_items').delete().eq('id',item.sbId).then(({error})=>{if(error)console.error(error.message);});
   S.shopItems.splice(idx,1);
-  if(item?.extra){S.extraItems=S.extraItems.filter((_,i)=>S.shopItems.filter(x=>x.extra).indexOf(S.shopItems.filter(x=>x.extra)[i])!==-1);}
-  sav();rIP();
+  if(item?.extra)S.extraItems=S.extraItems.filter(e=>e!==item);
+  rIP();
 }
-function addExtra(){
+async function addExtra(){
   const n=document.getElementById('en')?.value?.trim();if(!n)return;
   const hv=parseFloat(document.getElementById('ehv')?.value)||1;
   const een=document.getElementById('eee')?.value?.trim()||'st';
   const item={naam:n,hoeveelheid:hv,eenheid:een,done:false,extra:true,afd:getAfd(n)};
   S.extraItems.push(item);S.shopItems.push(item);
-  document.getElementById('en').value='';
-  document.getElementById('ehv').value='';
-  document.getElementById('eee').value='';
-  sav();rIP();
+  document.getElementById('en').value='';document.getElementById('ehv').value='';document.getElementById('eee').value='';
+  rIP();
+  if(S.lijstId){
+    const{data,error}=await DB.from('shopping_items').insert({
+      list_id:S.lijstId,name:n,amount:`${hv}${een?' '+een:''}`,
+      department:item.afd,is_checked:false,sort_order:1000+S.extraItems.length,
+    }).select('id').single();
+    if(!error&&data)item.sbId=data.id;
+  }
 }
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
@@ -687,7 +753,7 @@ function renderWeekmenu(){
     ${sel.length===0?`<div class="empty"><span>📅</span>Nog geen recepten gekozen.<br><br><button class="btn btn-dark" onclick="setTab('recepten')">Ga naar Recepten →</button></div>`:`
       <div class="prog-bar">${[1,2].map(n=>`<div class="prog-seg${sel.length>=n?' done':''}"></div>`).join('')}</div>
       <div class="cards-grid">${sel.map(r=>buildCard(r,{showSel:true,showEdit:true,stepper:true,pers:gP(r.id)})).join('')}</div>
-      ${sel.length>=1?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="bouwShop();setTab('boodschappen')">Boodschappenlijst maken →</button>`:''}
+      ${sel.length>=1?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="maakBoodschappenlijst()">Boodschappenlijst maken →</button>`:''}
       <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`}`;
 }
 
