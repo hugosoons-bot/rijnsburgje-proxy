@@ -207,7 +207,7 @@ textarea.inp{resize:vertical}
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/supabase.js"></script>
 <script>
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const DB=supabase.createClient(
@@ -336,9 +336,10 @@ async function slaWeekmenuOp(){
     S.menuId=menuId;
   }
   await DB.from('week_menu_items').delete().eq('menu_id',menuId);
-  if(S.geselecteerd.length>0){
+  const teInserten=S.geselecteerd.filter(rid=>!rid.startsWith('demo-'));
+  if(teInserten.length>0){
     const{error}=await DB.from('week_menu_items').insert(
-      S.geselecteerd.map((rid,i)=>({menu_id:menuId,recipe_id:rid,day_of_week:i,servings:S.weekPers[rid]||null}))
+      teInserten.map((rid,i)=>({menu_id:menuId,recipe_id:rid,day_of_week:i,servings:S.weekPers[rid]||null}))
     );
     if(error)console.error('Weekmenu opslaan mislukt:',error.message);
   }
