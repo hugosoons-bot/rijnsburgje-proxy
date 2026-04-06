@@ -214,7 +214,6 @@ const DB=supabase.createClient(
   'https://mlbhngkmkaorvvkepwvo.supabase.co',
   'sb_publishable_kdnrLxPrEzxZatNFaUMA1A_c89tCL9l'
 );
-const USER_ID='6bbada61-f0dc-40e4-b2de-354ecd61c5c6';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const SK='rij-v6';
@@ -247,6 +246,8 @@ const DEMO=[
 let S={
   tab:'recepten',recepten:[],geselecteerd:[],weekPers:{},
   fK:'Alle',fC:'Alle',hideNNEK:false,zoekterm:'',
+  scherm:'laden',gebruiker:null,profiel:null,
+  authTab:'login',authFout:'',authLaden:false,
   ontdekTab:'zoeken',zoekUrl:'',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
@@ -265,7 +266,7 @@ function sav(){
 
 function toSB(r){
   return{
-    id:r.id,user_id:USER_ID,
+    id:r.id,user_id:S.gebruiker?.id,
     title:r.titel,description:r.omschrijving||'',
     image_url:r.afbeelding&&!r.afbeelding.startsWith('blob:')?r.afbeelding:null,source_url:r.bron||null,
     ingredients:r.ingredienten||[],instructions:r.stappen||[],
@@ -715,9 +716,87 @@ function renderBoodschappen(){
       </div>`:''}`;
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function renderAuth(){
+  if(S.scherm==='laden')return'<div class="hint" style="padding-top:40vh">Laden...</div>';
+  return`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> 🍳</h1>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:24px">Jouw persoonlijke receptenapp</p>
+      <div class="mode-row" style="margin-bottom:20px">
+        <button class="mb${S.authTab==='login'?' on':''}" onclick="S.authTab='login';S.authFout='';rIP()">Inloggen</button>
+        <button class="mb${S.authTab==='register'?' on':''}" onclick="S.authTab='register';S.authFout='';rIP()">Account aanmaken</button>
+      </div>
+      ${S.authTab==='register'?`
+        <span class="sec-label">Naam</span>
+        <input id="reg-naam" class="inp" style="margin-bottom:12px" placeholder="bijv. Hugo &amp; Minke" onkeydown="if(event.key==='Enter')registreer()">
+      `:''}
+      <span class="sec-label">E-mailadres</span>
+      <input id="${S.authTab==='login'?'log':'reg'}-email" class="inp" style="margin-bottom:12px" type="email" placeholder="jouw@email.nl" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+      <span class="sec-label">Wachtwoord</span>
+      <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:20px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+      ${S.authFout?`<div class="box-err" style="margin-bottom:16px">⚠️ ${h(S.authFout)}</div>`:''}
+      <button class="btn btn-accent btn-w" onclick="${S.authTab==='login'?'login()':'registreer()'}" ${S.authLaden?'disabled':''}>
+        ${S.authLaden?'Even wachten...':(S.authTab==='login'?'Inloggen →':'Account aanmaken →')}
+      </button>
+    </div>
+  </div>`;
+}
+
+async function registreer(){
+  const naam=document.getElementById('reg-naam')?.value?.trim();
+  const email=document.getElementById('reg-email')?.value?.trim();
+  const ww=document.getElementById('reg-ww')?.value;
+  if(!naam){S.authFout='Vul je naam in';rIP();return;}
+  if(!email){S.authFout='Vul je e-mailadres in';rIP();return;}
+  if(!ww||ww.length<6){S.authFout='Wachtwoord moet minimaal 6 tekens zijn';rIP();return;}
+  S.authLaden=true;S.authFout='';rIP();
+  try{
+    const{data,error}=await DB.auth.signUp({email,password:ww});
+    if(error)throw error;
+    const username=naam.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,20)+'-'+Date.now().toString(36);
+    const{error:pe}=await DB.from('profiles').insert({id:data.user.id,username,display_name:naam});
+    if(pe)throw pe;
+    S.gebruiker=data.user;S.profiel={display_name:naam};
+    await lod();S.scherm='app';
+  }catch(e){S.authFout=e.message||'Er ging iets mis';}
+  finally{S.authLaden=false;render();}
+}
+
+async function login(){
+  const email=document.getElementById('log-email')?.value?.trim();
+  const ww=document.getElementById('log-ww')?.value;
+  if(!email||!ww){S.authFout='Vul e-mail en wachtwoord in';rIP();return;}
+  S.authLaden=true;S.authFout='';rIP();
+  try{
+    const{data,error}=await DB.auth.signInWithPassword({email,password:ww});
+    if(error)throw error;
+    S.gebruiker=data.user;
+    const{data:p}=await DB.from('profiles').select('display_name').eq('id',data.user.id).single();
+    S.profiel=p||{display_name:email};
+    await lod();S.scherm='app';
+  }catch(e){S.authFout=e.message==='Invalid login credentials'?'E-mail of wachtwoord klopt niet':e.message||'Er ging iets mis';}
+  finally{S.authLaden=false;render();}
+}
+
+async function uitloggen(){
+  await DB.auth.signOut();
+  Object.assign(S,{gebruiker:null,profiel:null,recepten:[],geselecteerd:[],weekPers:{},shopItems:[],extraItems:[],resultaten:[],scherm:'login',authTab:'login',authFout:''});
+  render();
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
-  document.getElementById('hdr-sub').textContent=`${S.recepten.length} recepten opgeslagen`;
+  const hdr=document.getElementById('hdr');
+  if(S.scherm!=='app'){
+    hdr.style.display='none';
+    document.getElementById('content').innerHTML=renderAuth();
+    return;
+  }
+  hdr.style.display='';
+  const naam=S.profiel?.display_name||S.gebruiker?.email||'';
+  document.getElementById('hdr-sub').innerHTML=`${h(naam)} &middot; ${S.recepten.length} recepten <a href="#" onclick="uitloggen();return false" style="color:var(--text3);font-size:10px;margin-left:8px">uitloggen</a>`;
   document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','zoeken','weekmenu','boodschappen'][i]===S.tab));
   let html='';
   if(S.tab==='recepten')html=renderRecepten();
@@ -728,9 +807,16 @@ function render(){
 }
 function rIP(){const y=window.scrollY;render();window.scrollTo(0,y);}
 window.addEventListener('DOMContentLoaded',async()=>{
+  render();
   const{data:{session}}=await DB.auth.getSession();
-  if(!session)await DB.auth.signInWithPassword({email:'test@rijnsburgje.nl',password:'Poepdoos123?!'});
-  await lod();
+  if(session){
+    S.gebruiker=session.user;
+    const{data:p}=await DB.from('profiles').select('display_name').eq('id',session.user.id).single();
+    S.profiel=p||{display_name:session.user.email};
+    await lod();S.scherm='app';
+  }else{
+    S.scherm='login';
+  }
   render();
 });
 </script>
