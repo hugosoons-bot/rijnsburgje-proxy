@@ -312,6 +312,15 @@ function getMaandag(){
   const m=new Date(d);m.setDate(d.getDate()-(dag-1));m.setHours(0,0,0,0);
   return m.toISOString().split('T')[0];
 }
+function getVolgendeWeek(){
+  const d=new Date(getMaandag()+'T00:00:00');
+  d.setDate(d.getDate()+7);
+  return d.toISOString().split('T')[0];
+}
+function formatMaandag(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
+}
 async function laadWeekmenu(){
   if(!S.gebruiker)return;
   const{data:menu}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
@@ -365,8 +374,7 @@ async function saveRes(idx){
 }
 function toggleSel(id){
   if(S.geselecteerd.includes(id))S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
-  else if(S.geselecteerd.length<2)S.geselecteerd.push(id);
-  else S.geselecteerd=[S.geselecteerd[1],id];
+  else S.geselecteerd.push(id);
   render();slaWeekmenuOp();
 }
 function gP(id){return S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;}
@@ -574,6 +582,50 @@ async function laadBoodschappen(){
   await herlaadBoodschappen(list.id);
   abonneer(list.id);
 }
+async function ensureLijstId(){
+  if(S.lijstId)return S.lijstId;
+  if(!S.gebruiker)return null;
+  if(!S.menuId){
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    if(bestaand)S.menuId=bestaand.id;
+    else{
+      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag()}).select('id').single();
+      if(nieuw)S.menuId=nieuw.id;
+    }
+  }
+  if(!S.menuId)return null;
+  const{data:bestaand}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',S.menuId).maybeSingle();
+  if(bestaand){S.lijstId=bestaand.id;abonneer(bestaand.id);return S.lijstId;}
+  const{data:nieuw}=await DB.from('shopping_lists').insert({user_id:S.gebruiker.id,menu_id:S.menuId}).select('id').single();
+  if(nieuw){S.lijstId=nieuw.id;abonneer(nieuw.id);}
+  return S.lijstId||null;
+}
+async function bewaarVoorVolgendeWeek(){
+  const items=S.extraItems.filter(i=>!i.done);
+  if(!items.length){alert('Geen handmatige items om te bewaren.');return;}
+  if(!S.gebruiker)return;
+  const vMaandag=getVolgendeWeek();
+  let menuId;
+  const{data:em}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',vMaandag).maybeSingle();
+  if(em)menuId=em.id;
+  else{
+    const{data:nm}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:vMaandag}).select('id').single();
+    menuId=nm?.id;
+  }
+  if(!menuId)return;
+  let lijstId;
+  const{data:el}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',menuId).maybeSingle();
+  if(el)lijstId=el.id;
+  else{
+    const{data:nl}=await DB.from('shopping_lists').insert({user_id:S.gebruiker.id,menu_id:menuId}).select('id').single();
+    lijstId=nl?.id;
+  }
+  if(!lijstId)return;
+  await DB.from('shopping_items').insert(
+    items.map((item,i)=>({list_id:lijstId,name:item.naam,amount:`${item.hoeveelheid}${item.eenheid?' '+item.eenheid:''}`,department:item.afd||'Overig',is_checked:false,sort_order:1000+i}))
+  );
+  alert(`${items.length} item${items.length===1?'':'s'} bewaard voor de week van ${formatMaandag(vMaandag)}.`);
+}
 let realtimeSub=null;
 function abonneer(lijstId){
   if(realtimeSub){DB.removeChannel(realtimeSub);realtimeSub=null;}
@@ -604,12 +656,15 @@ async function addExtra(){
   S.extraItems.push(item);S.shopItems.push(item);
   document.getElementById('en').value='';document.getElementById('ehv').value='';document.getElementById('eee').value='';
   rIP();
-  if(S.lijstId){
-    const{data,error}=await DB.from('shopping_items').insert({
-      list_id:S.lijstId,name:n,amount:`${hv}${een?' '+een:''}`,
-      department:item.afd,is_checked:false,sort_order:1000+S.extraItems.length,
-    }).select('id').single();
-    if(!error&&data)item.sbId=data.id;
+  if(S.gebruiker){
+    const lijstId=await ensureLijstId();
+    if(lijstId){
+      const{data,error}=await DB.from('shopping_items').insert({
+        list_id:lijstId,name:n,amount:`${hv}${een?' '+een:''}`,
+        department:item.afd,is_checked:false,sort_order:1000+S.extraItems.length,
+      }).select('id').single();
+      if(!error&&data)item.sbId=data.id;
+    }
   }
 }
 
@@ -750,17 +805,16 @@ function renderZoeken(){
 function renderWeekmenu(){
   const sel=S.recepten.filter(r=>S.geselecteerd.includes(r.id));
   return`
-    <div class="box-info" style="background:var(--accent-bg)">Selecteer maximaal 2 recepten via het tabblad "Recepten". Pas hier het aantal personen per recept aan met de + en − knoppen.</div>
+    <div style="font-size:13px;color:var(--text2);font-weight:500;margin-bottom:12px">De week van maandag ${formatMaandag(getMaandag())}</div>
+    <div class="box-info" style="background:var(--accent-bg)">Selecteer recepten via het tabblad "Recepten". Pas hier het aantal personen per recept aan met de + en − knoppen.</div>
     ${sel.length===0?`<div class="empty"><span>📅</span>Nog geen recepten gekozen.<br><br><button class="btn btn-dark" onclick="setTab('recepten')">Ga naar Recepten →</button></div>`:`
-      <div class="prog-bar">${[1,2].map(n=>`<div class="prog-seg${sel.length>=n?' done':''}"></div>`).join('')}</div>
       <div class="cards-grid">${sel.map(r=>buildCard(r,{showSel:true,showEdit:true,stepper:true,pers:gP(r.id)})).join('')}</div>
-      ${sel.length>=1?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="maakBoodschappenlijst()">Boodschappenlijst maken →</button>`:''}
+      <button class="btn btn-dark btn-w" style="margin-top:14px" onclick="maakBoodschappenlijst()">Boodschappenlijst maken →</button>
       <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`}`;
 }
 
 function renderBoodschappen(){
-  if(S.geselecteerd.length===0)return`<div class="empty"><span>🛒</span>Selecteer eerst recepten via het Weekmenu.</div>`;
-  if(S.shopItems.length===0)bouwShop();
+  if(S.shopItems.length===0&&S.geselecteerd.length>0)bouwShop();
 
   const actief=S.shopItems.filter(i=>!i.done);
   const done=S.shopItems.filter(i=>i.done);
@@ -770,11 +824,12 @@ function renderBoodschappen(){
   const groepen=AFDS.map(a=>({...a,items:S.shopItems.map((x,i)=>({...x,idx:i})).filter(x=>!x.done&&x.afd===a.n)})).filter(g=>g.items.length>0);
 
   return`
+    <div style="font-size:13px;color:var(--text2);font-weight:500;margin-bottom:8px">De week van maandag ${formatMaandag(getMaandag())}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text)">Boodschappenlijst</h2>
       <span style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)">${done.length}/${S.shopItems.length} afgevinkt</span>
     </div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sRec.map(r=>`<strong>${h(r.titel)}</strong> (${gP(r.id)} pers.)`).join(' + ')}</div>
+    ${sRec.length>0?`<div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sRec.map(r=>`<strong>${h(r.titel)}</strong> (${gP(r.id)} pers.)`).join(' + ')}</div>`:''}
 
     <!-- Extra toevoegen -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
@@ -820,7 +875,11 @@ function renderBoodschappen(){
             <span class="sqty" style="opacity:.6">${item.hoeveelheid} ${h(item.eenheid)}</span>
             <button class="sdel" onclick="delShop(${idx})">✕</button>
           </div>`;}).join('')}</div>`:''}
-      </div>`:''}`;
+      </div>`:''}
+    ${S.extraItems.filter(i=>!i.done).length>0?`
+    <div style="margin-top:16px">
+      <button class="btn btn-ghost btn-w" onclick="bewaarVoorVolgendeWeek()">Bewaar handmatige items voor volgende week →</button>
+    </div>`:''}`;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
