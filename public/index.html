@@ -248,6 +248,7 @@ let S={
   fK:'Alle',fC:'Alle',hideNNEK:false,zoekterm:'',
   scherm:'laden',gebruiker:null,profiel:null,
   authTab:'login',authFout:'',authLaden:false,
+  menuId:null,
   ontdekTab:'zoeken',zoekUrl:'',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
@@ -257,11 +258,7 @@ let S={
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 function sav(){
-  try{
-    localStorage.setItem(SK+'-s',JSON.stringify(S.geselecteerd));
-    localStorage.setItem(SK+'-p',JSON.stringify(S.weekPers));
-    localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));
-  }catch(e){}
+  try{localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}
 }
 
 function toSB(r){
@@ -297,10 +294,9 @@ async function loadRecepten(){
   S.recepten=data.length>0?data.map(fromSB):DEMO;
 }
 async function lod(){
-  try{const v=localStorage.getItem(SK+'-s');if(v)S.geselecteerd=JSON.parse(v);}catch{}
-  try{const v=localStorage.getItem(SK+'-p');if(v)S.weekPers=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   await loadRecepten();
+  await laadWeekmenu();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -308,6 +304,49 @@ function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 function sc(v,van,naar){const r=v*(naar/(van||4));return r%1===0?r:parseFloat(r.toFixed(1));}
 function getAfd(naam){const n=naam.toLowerCase();for(const a of AFDS){if(a.w.some(w=>n.includes(w)))return a.n;}return"Overig";}
 function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken];return EMOJI_MAP.default;}
+
+// ── Weekmenu Supabase ─────────────────────────────────────────────────────────
+function getMaandag(){
+  const d=new Date();const dag=d.getDay()||7;
+  const m=new Date(d);m.setDate(d.getDate()-(dag-1));m.setHours(0,0,0,0);
+  return m.toISOString().split('T')[0];
+}
+async function laadWeekmenu(){
+  if(!S.gebruiker)return;
+  const{data:menu}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+  if(!menu){S.menuId=null;S.geselecteerd=[];S.weekPers={};return;}
+  S.menuId=menu.id;
+  const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
+  S.geselecteerd=(items||[]).map(i=>i.recipe_id);
+  S.weekPers={};
+  (items||[]).forEach(i=>{if(i.servings)S.weekPers[i.recipe_id]=i.servings;});
+}
+async function slaWeekmenuOp(){
+  if(!S.gebruiker)return;
+  let menuId=S.menuId;
+  if(!menuId){
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    if(bestaand){menuId=bestaand.id;}
+    else{
+      const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag()}).select('id').single();
+      if(error){console.error('Weekmenu aanmaken mislukt:',error.message);return;}
+      menuId=nieuw.id;
+    }
+    S.menuId=menuId;
+  }
+  await DB.from('week_menu_items').delete().eq('menu_id',menuId);
+  if(S.geselecteerd.length>0){
+    const{error}=await DB.from('week_menu_items').insert(
+      S.geselecteerd.map((rid,i)=>({menu_id:menuId,recipe_id:rid,day_of_week:i,servings:S.weekPers[rid]||null}))
+    );
+    if(error)console.error('Weekmenu opslaan mislukt:',error.message);
+  }
+}
+async function resetWeekmenu(){
+  if(S.menuId)await DB.from('week_menu_items').delete().eq('menu_id',S.menuId);
+  S.geselecteerd=[];S.weekPers={};S.shopItems=[];S.extraItems=[];
+  sav();render();
+}
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
 function setTab(t){S.tab=t;S.fout='';render();}
@@ -326,10 +365,10 @@ function toggleSel(id){
   if(S.geselecteerd.includes(id))S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
   else if(S.geselecteerd.length<2)S.geselecteerd.push(id);
   else S.geselecteerd=[S.geselecteerd[1],id];
-  sav();render();
+  render();slaWeekmenuOp();
 }
 function gP(id){return S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;}
-function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));sav();render();}
+function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));render();slaWeekmenuOp();}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openEdit(id){
@@ -648,7 +687,8 @@ function renderWeekmenu(){
     ${sel.length===0?`<div class="empty"><span>📅</span>Nog geen recepten gekozen.<br><br><button class="btn btn-dark" onclick="setTab('recepten')">Ga naar Recepten →</button></div>`:`
       <div class="prog-bar">${[1,2].map(n=>`<div class="prog-seg${sel.length>=n?' done':''}"></div>`).join('')}</div>
       <div class="cards-grid">${sel.map(r=>buildCard(r,{showSel:true,showEdit:true,stepper:true,pers:gP(r.id)})).join('')}</div>
-      ${sel.length>=1?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="bouwShop();setTab('boodschappen')">Boodschappenlijst maken →</button>`:''}`}`;
+      ${sel.length>=1?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="bouwShop();setTab('boodschappen')">Boodschappenlijst maken →</button>`:''}
+      <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`}`;
 }
 
 function renderBoodschappen(){
