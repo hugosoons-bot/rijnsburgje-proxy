@@ -148,6 +148,10 @@ textarea.inp{resize:vertical}
 .friend-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;box-shadow:var(--shadow)}
 .friend-name{flex:1;font-size:13px;font-weight:500;color:var(--text)}
 .friend-avatar{width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--accent);flex-shrink:0}
+.feed-auteur{font-size:11px;color:var(--text3);margin-bottom:4px;padding-left:2px}
+.btn-like{background:none;border:none;cursor:pointer;font-size:13px;color:var(--text2);padding:4px 8px;border-radius:20px;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+.btn-like:hover{background:var(--red-bg);color:var(--red)}
+.btn-like.liked{color:var(--red)}
 .prog-bar{display:flex;gap:6px;margin-bottom:14px}
 .prog-seg{flex:1;height:3px;border-radius:3px;background:var(--border);transition:background .3s}
 .prog-seg.done{background:var(--accent)}
@@ -262,6 +266,7 @@ let S={
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
+  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
 };
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -316,6 +321,7 @@ async function laadPubliekeRecepten(){
   S.ladenGemeenschap=true;rIP();
   const{data,error}=await DB.from('recipes').select('*').eq('is_public',true).neq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
   S.publiekeRecepten=error?[]:(data||[]).map(fromSB);
+  if(S.publiekeRecepten.length)await laadLikesVoor(S.publiekeRecepten.map(r=>r.id));
   S.ladenGemeenschap=false;rIP();
 }
 async function laadVrienden(){
@@ -334,6 +340,7 @@ async function laadVrienden(){
   S.ikVolg=ikVolgData.data||[];
   S.volgers=volgersData.data||[];
   rIP();
+  await laadFeed();
 }
 async function deelLink(url,titel,tekst){
   if(navigator.share){try{await navigator.share({title:titel,text:tekst,url});return;}catch{}}
@@ -379,6 +386,38 @@ async function ontvolg(userId){
   await DB.from('follows').delete().eq('follower_id',S.gebruiker.id).eq('following_id',userId);
   S.vriendenResultaten=S.vriendenResultaten.map(p=>p);// force re-render
   await laadVrienden();
+}
+async function laadLikesVoor(ids){
+  if(!ids.length||!S.gebruiker)return;
+  const{data}=await DB.from('recipe_likes').select('recipe_id,user_id').in('recipe_id',ids);
+  (data||[]).forEach(l=>{
+    S.likeCounts[l.recipe_id]=(S.likeCounts[l.recipe_id]||0)+1;
+    if(l.user_id===S.gebruiker.id)S.mijnLikes.add(l.recipe_id);
+  });
+}
+async function laadFeed(){
+  if(!S.gebruiker||S.ikVolg.length===0){S.feed=[];S.ladenFeed=false;rIP();return;}
+  S.ladenFeed=true;rIP();
+  const volgIds=S.ikVolg.map(p=>p.id);
+  const{data}=await DB.from('recipes').select('*').in('user_id',volgIds).eq('is_public',true).order('created_at',{ascending:false}).limit(20);
+  if(!data||!data.length){S.feed=[];S.ladenFeed=false;rIP();return;}
+  const profielMap={};S.ikVolg.forEach(p=>profielMap[p.id]=p.display_name);
+  S.feed=data.map(r=>({...fromSB(r),auteursNaam:profielMap[r.user_id]||''}));
+  await laadLikesVoor(data.map(r=>r.id));
+  S.ladenFeed=false;rIP();
+}
+async function toggleLike(recipeId){
+  if(!S.gebruiker)return;
+  if(S.mijnLikes.has(recipeId)){
+    await DB.from('recipe_likes').delete().eq('recipe_id',recipeId).eq('user_id',S.gebruiker.id);
+    S.mijnLikes.delete(recipeId);
+    S.likeCounts[recipeId]=Math.max(0,(S.likeCounts[recipeId]||1)-1);
+  }else{
+    await DB.from('recipe_likes').insert({recipe_id:recipeId,user_id:S.gebruiker.id});
+    S.mijnLikes.add(recipeId);
+    S.likeCounts[recipeId]=(S.likeCounts[recipeId]||0)+1;
+  }
+  rIP();
 }
 async function loadRecepten(){
   const{data,error}=await DB.from('recipes').select('*').order('created_at',{ascending:false});
@@ -771,13 +810,14 @@ function buildLabels(r){
 }
 function buildStars(rating,id){return'<div class="stars">'+[1,2,3,4,5].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">★</span>`).join('')+'</div>';}
 function buildCard(r,opts={}){
-  const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer}=opts;
+  const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer,showLike,showAuteur}=opts;
   const sel=S.geselecteerd.includes(r.id);
   const p=pers||r.personen||4;
   const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${h(i.eenheid)}</strong> ${h(i.naam)}</li>`).join('');
   const stps=(r.stappen||[]).map(s=>`<li>${h(s)}</li>`).join('');
   const cid='c'+r.id.replace(/[^a-z0-9]/gi,'-');
-  return`<div class="rcard${sel?' sel':''}" id="${cid}">
+  return`${showAuteur&&r.auteursNaam?`<div class="feed-auteur">👤 ${h(r.auteursNaam)}</div>`:''}
+  <div class="rcard${sel?' sel':''}" id="${cid}">
     ${sel?'<div class="sel-badge">✓</div>':''}
     <div class="rcard-img">${r.afbeelding
       ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:${r.afbeelding.startsWith('blob:')?'contain':'cover'};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
@@ -808,6 +848,7 @@ function buildCard(r,opts={}){
       ${showSel?`<button class="btn ${sel?'btn-ghost':'btn-dark'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
       ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
+      ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
   </div>`;
 }
@@ -852,7 +893,7 @@ function renderZoeken(){
       ?'<div class="hint">Recepten laden...</div>'
       :S.publiekeRecepten.length===0
         ?'<div class="hint">Nog geen publieke recepten van andere gebruikers. Zet een recept op "Publiek" via het tabblad Recepten.</div>'
-        :`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.publiekeRecepten.length} publiek recept${S.publiekeRecepten.length===1?'':'en'} van andere gebruikers</p><div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true})).join('')}</div>`;
+        :`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.publiekeRecepten.length} publiek recept${S.publiekeRecepten.length===1?'':'en'} van andere gebruikers</p><div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>`;
     return`<div class="search-wrap"><h2>Ontdekken</h2>${tabsBtns}</div>${gHTML}`;
   }
 
@@ -1004,6 +1045,14 @@ function renderVrienden(){
   }
   return`
     <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text);margin-bottom:16px">Vrienden</h2>
+
+    ${S.ikVolg.length>0?`
+    <div style="margin-bottom:20px">
+      <span class="sec-label">Recent gedeeld door mensen die je volgt</span>
+      ${S.ladenFeed?'<div class="hint">Feed laden...</div>'
+        :S.feed.length===0?'<div class="hint">Nog geen recepten gedeeld door mensen die je volgt.</div>'
+        :`<div class="cards-grid">${S.feed.map(r=>buildCard(r,{showLike:true,showKopieer:true,showAuteur:true})).join('')}</div>`}
+    </div>`:''}
 
     <div class="search-wrap" style="margin-bottom:16px;text-align:center">
       <div style="font-size:28px;margin-bottom:8px">🔗</div>
