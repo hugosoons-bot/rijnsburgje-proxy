@@ -254,6 +254,7 @@ let S={
   laden:false,fout:'',resultaten:[],
   editId:null,mK:'',mC:'',mTags:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
+  publiekeRecepten:[],ladenGemeenschap:false,
 };
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -270,7 +271,7 @@ function toSB(r){
     cuisine:r.keuken||null,category:r.categorie||null,
     tags:r.tags||[],servings:r.personen||4,
     rating:r.rating||null,notes:r.notities||null,
-    is_public:false,
+    is_public:r.publiek||false,
   };
 }
 function fromSB(row){
@@ -282,11 +283,33 @@ function fromSB(row){
     tags:row.tags||[],personen:row.servings||4,
     rating:row.rating||0,notities:row.notes||'',
     opgeslagen:true,datum:row.created_at?row.created_at.split('T')[0]:'',
+    publiek:row.is_public||false,eigenaarId:row.user_id,
   };
 }
 async function savRecept(r){
   const{error}=await DB.from('recipes').upsert(toSB(r));
   if(error)console.error('Opslaan mislukt:',error.message);
+}
+async function togglePubliek(id){
+  const r=S.recepten.find(x=>x.id===id);if(!r)return;
+  r.publiek=!r.publiek;render();
+  await savRecept(r);
+}
+async function kopieerPubliek(id){
+  const r=S.publiekeRecepten.find(x=>x.id===id);if(!r)return;
+  const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
+  const kopie={...r,id:nieuwId,publiek:false,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  S.recepten.unshift(kopie);
+  render();
+  await savRecept(kopie);
+  alert(`"${r.titel}" is gekopieerd naar jouw recepten.`);
+}
+async function laadPubliekeRecepten(){
+  if(!S.gebruiker)return;
+  S.ladenGemeenschap=true;rIP();
+  const{data,error}=await DB.from('recipes').select('*').eq('is_public',true).neq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
+  S.publiekeRecepten=error?[]:(data||[]).map(fromSB);
+  S.ladenGemeenschap=false;rIP();
 }
 async function loadRecepten(){
   const{data,error}=await DB.from('recipes').select('*').order('created_at',{ascending:false});
@@ -678,7 +701,7 @@ function buildLabels(r){
 }
 function buildStars(rating,id){return'<div class="stars">'+[1,2,3,4,5].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">★</span>`).join('')+'</div>';}
 function buildCard(r,opts={}){
-  const{op,idx,showSel,showEdit,showDel,stepper,pers}=opts;
+  const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer}=opts;
   const sel=S.geselecteerd.includes(r.id);
   const p=pers||r.personen||4;
   const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${h(i.eenheid)}</strong> ${h(i.naam)}</li>`).join('');
@@ -711,8 +734,10 @@ function buildCard(r,opts={}){
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Label</button>`:''}
+      ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showSel?`<button class="btn ${sel?'btn-ghost':'btn-dark'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
+      ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
     </div>
   </div>`;
 }
@@ -737,13 +762,29 @@ function renderRecepten(){
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
       <button class="fb nnek${S.hideNNEK?' on':''}" onclick="S.hideNNEK=!S.hideNNEK;rIP()">🚫 Verberg "Niet nog een keer"</button>
     </div>
-    ${gef.length===0?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>':`<div class="cards-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true})).join('')}</div>`}`;
+    ${gef.length===0?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>':`<div class="cards-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
 function renderZoeken(){
   const busy=S.laden;
   const tijden=['Alle','≤ 20 min','≤ 45 min','≤ 60 min'];
   const dieten=[{v:'alles',l:'Alles'},{v:'vegetarisch',l:'Vegetarisch'},{v:'pescetarisch',l:'Pescetarisch'},{v:'met vlees',l:'Met vlees'}];
+  const tabsBtns=`
+    <div class="mode-row" style="margin-bottom:16px">
+      <button class="mb${S.ontdekTab==='zoeken'?' on':''}" onclick="S.ontdekTab='zoeken';render()">🔍 Zoeken</button>
+      <button class="mb${S.ontdekTab==='url'?' on':''}" onclick="S.ontdekTab='url';render()">🔗 URL</button>
+      <button class="mb${S.ontdekTab==='foto'?' on':''}" onclick="S.ontdekTab='foto';render()">📷 Foto</button>
+      <button class="mb${S.ontdekTab==='gemeenschap'?' on':''}" onclick="S.ontdekTab='gemeenschap';laadPubliekeRecepten()">👥 Gemeenschap</button>
+    </div>`;
+
+  if(S.ontdekTab==='gemeenschap'){
+    const gHTML=S.ladenGemeenschap
+      ?'<div class="hint">Recepten laden...</div>'
+      :S.publiekeRecepten.length===0
+        ?'<div class="hint">Nog geen publieke recepten van andere gebruikers. Zet een recept op "Publiek" via het tabblad Recepten.</div>'
+        :`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.publiekeRecepten.length} publiek recept${S.publiekeRecepten.length===1?'':'en'} van andere gebruikers</p><div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true})).join('')}</div>`;
+    return`<div class="search-wrap"><h2>Ontdekken</h2>${tabsBtns}</div>${gHTML}`;
+  }
 
   let paneel='';
   if(S.ontdekTab==='zoeken'){
@@ -789,11 +830,7 @@ function renderZoeken(){
   return`
     <div class="search-wrap">
       <h2>Ontdekken</h2>
-      <div class="mode-row" style="margin-bottom:16px">
-        <button class="mb${S.ontdekTab==='zoeken'?' on':''}" onclick="S.ontdekTab='zoeken';render()">🔍 Zoeken</button>
-        <button class="mb${S.ontdekTab==='url'?' on':''}" onclick="S.ontdekTab='url';render()">🔗 URL</button>
-        <button class="mb${S.ontdekTab==='foto'?' on':''}" onclick="S.ontdekTab='foto';render()">📷 Foto</button>
-      </div>
+      ${tabsBtns}
       ${paneel}
     </div>
     ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)}</div>`:''}
