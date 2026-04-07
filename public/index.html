@@ -267,6 +267,7 @@ let S={
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
+  weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},
 };
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -308,7 +309,7 @@ async function togglePubliek(id){
   await savRecept(r);
 }
 async function kopieerPubliek(id){
-  const r=S.publiekeRecepten.find(x=>x.id===id);if(!r)return;
+  const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
   const kopie={...r,id:nieuwId,publiek:false,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
@@ -396,14 +397,14 @@ async function laadLikesVoor(ids){
   });
 }
 async function laadFeed(){
-  if(!S.gebruiker||S.ikVolg.length===0){S.feed=[];S.ladenFeed=false;rIP();return;}
+  if(!S.gebruiker||S.ikVolg.length===0){S.feed=[];S.feedMenus=[];S.ladenFeed=false;rIP();return;}
   S.ladenFeed=true;rIP();
   const volgIds=S.ikVolg.map(p=>p.id);
   const{data}=await DB.from('recipes').select('*').in('user_id',volgIds).eq('is_public',true).order('created_at',{ascending:false}).limit(20);
-  if(!data||!data.length){S.feed=[];S.ladenFeed=false;rIP();return;}
   const profielMap={};S.ikVolg.forEach(p=>profielMap[p.id]=p.display_name);
-  S.feed=data.map(r=>({...fromSB(r),auteursNaam:profielMap[r.user_id]||''}));
-  await laadLikesVoor(data.map(r=>r.id));
+  S.feed=(data||[]).map(r=>({...fromSB(r),auteursNaam:profielMap[r.user_id]||''}));
+  if(data&&data.length)await laadLikesVoor(data.map(r=>r.id));
+  await laadFeedMenus();
   S.ladenFeed=false;rIP();
 }
 async function toggleLike(recipeId){
@@ -455,9 +456,9 @@ function formatMaandag(dateStr){
 }
 async function laadWeekmenu(){
   if(!S.gebruiker)return;
-  const{data:menu}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
-  if(!menu){S.menuId=null;S.geselecteerd=[];S.weekPers={};return;}
-  S.menuId=menu.id;
+  const{data:menu}=await DB.from('week_menus').select('id,is_public').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+  if(!menu){S.menuId=null;S.weekMenuPubliek=false;S.geselecteerd=[];S.weekPers={};return;}
+  S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
   const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
   S.geselecteerd=(items||[]).map(i=>i.recipe_id);
   S.weekPers={};
@@ -470,7 +471,7 @@ async function slaWeekmenuOp(){
     const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
     if(bestaand){menuId=bestaand.id;}
     else{
-      const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag()}).select('id').single();
+      const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag(),is_public:S.weekMenuPubliek}).select('id').single();
       if(error){console.error('Weekmenu aanmaken mislukt:',error.message);return;}
       menuId=nieuw.id;
     }
@@ -489,6 +490,38 @@ async function resetWeekmenu(){
   if(S.menuId)await DB.from('week_menu_items').delete().eq('menu_id',S.menuId);
   S.geselecteerd=[];S.weekPers={};S.shopItems=[];S.extraItems=[];
   sav();render();
+}
+async function toggleWeekMenuPubliek(){
+  S.weekMenuPubliek=!S.weekMenuPubliek;
+  if(S.menuId){
+    await DB.from('week_menus').update({is_public:S.weekMenuPubliek}).eq('id',S.menuId);
+  } else if(S.weekMenuPubliek){
+    // Geen recepten geselecteerd maar toch publiek willen? Maak leeg menu aan.
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    if(bestaand){S.menuId=bestaand.id;await DB.from('week_menus').update({is_public:true}).eq('id',bestaand.id);}
+    else{
+      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag(),is_public:true}).select('id').single();
+      if(nieuw)S.menuId=nieuw.id;
+    }
+  }
+  rIP();
+}
+async function laadFeedMenus(){
+  if(!S.gebruiker||!S.ikVolg.length){S.feedMenus=[];return;}
+  const volgIds=S.ikVolg.map(p=>p.id);
+  const{data:menus}=await DB.from('week_menus').select('id,user_id').in('user_id',volgIds).eq('is_public',true).eq('week_start',getMaandag());
+  if(!menus||!menus.length){S.feedMenus=[];rIP();return;}
+  const profielMap={};S.ikVolg.forEach(p=>profielMap[p.id]=p.display_name);
+  const resultaten=await Promise.all(menus.map(async menu=>{
+    const{data:items}=await DB.from('week_menu_items')
+      .select('recipe_id,recipes(id,title,description,image_url,ingredients,instructions,cuisine,category,tags,servings,source_url,is_public,user_id)')
+      .eq('menu_id',menu.id).order('day_of_week');
+    const recepten=(items||[]).filter(i=>i.recipes).map(i=>fromSB(i.recipes));
+    recepten.forEach(r=>{S.menuReceptenMap[r.id]=r;});
+    return{menuId:menu.id,userId:menu.user_id,naam:profielMap[menu.user_id]||'',recepten};
+  }));
+  S.feedMenus=resultaten.filter(m=>m.recepten.length>0);
+  rIP();
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -954,6 +987,11 @@ function renderWeekmenu(){
   const sel=S.recepten.filter(r=>S.geselecteerd.includes(r.id));
   return`
     <div style="font-size:13px;color:var(--text2);font-weight:500;margin-bottom:12px">De week van maandag ${formatMaandag(getMaandag())}</div>
+    <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;margin-bottom:12px;box-shadow:var(--shadow)">
+      <span style="flex:1;font-size:13px;color:var(--text);font-weight:500">Weekmenu delen met volgers</span>
+      <span style="font-size:11px;color:var(--text3)">${S.weekMenuPubliek?'Zichtbaar in feeds':'Alleen voor jou'}</span>
+      <button class="btn ${S.weekMenuPubliek?'btn-accent':'btn-ghost'}" onclick="toggleWeekMenuPubliek()">${S.weekMenuPubliek?'🌐 Publiek':'🔒 Privé'}</button>
+    </div>
     <div class="box-info" style="background:var(--accent-bg)">Selecteer recepten via het tabblad "Recepten". Pas hier het aantal personen per recept aan met de + en − knoppen.</div>
     ${sel.length===0?`<div class="empty"><span>📅</span>Nog geen recepten gekozen.<br><br><button class="btn btn-dark" onclick="setTab('recepten')">Ga naar Recepten →</button></div>`:`
       <div class="cards-grid">${sel.map(r=>buildCard(r,{showSel:true,showEdit:true,stepper:true,pers:gP(r.id)})).join('')}</div>
@@ -1048,7 +1086,19 @@ function renderVrienden(){
 
     ${S.ikVolg.length>0?`
     <div style="margin-bottom:20px">
-      <span class="sec-label">Recent gedeeld door mensen die je volgt</span>
+      <span class="sec-label">Weekmenu van mensen die je volgt</span>
+      ${S.ladenFeed?'<div class="hint">Feed laden...</div>'
+        :S.feedMenus.length===0?'<div class="hint">Niemand heeft zijn weekmenu gedeeld deze week.</div>'
+        :S.feedMenus.map(menu=>`
+          <div class="search-wrap" style="margin-bottom:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">
+              👤 ${h(menu.naam)} kookt deze week: ${menu.recepten.map(r=>h(r.titel)).join(' &amp; ')}
+            </div>
+            <div class="cards-grid">${menu.recepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>
+          </div>`).join('')}
+    </div>
+    <div style="margin-bottom:20px">
+      <span class="sec-label">Recent gedeelde recepten</span>
       ${S.ladenFeed?'<div class="hint">Feed laden...</div>'
         :S.feed.length===0?'<div class="hint">Nog geen recepten gedeeld door mensen die je volgt.</div>'
         :`<div class="cards-grid">${S.feed.map(r=>buildCard(r,{showLike:true,showKopieer:true,showAuteur:true})).join('')}</div>`}
