@@ -390,22 +390,31 @@ def _html_fetch(opener, url: str, timeout: int = 12):
 
 
 def _try_wp_api(url: str) -> dict | None:
-    """Fallback: haal recept op via WordPress REST API (werkt ook als HTML geblokkeerd is)."""
+    """Fallback: haal recept op via WordPress.com publieke CDN-API (werkt ook als directe HTML geblokkeerd is)."""
     parsed = urlparse(url)
     parts = [p for p in parsed.path.rstrip("/").split("/") if p]
     if not parts:
         return None
     slug = parts[-1]
-    api_url = f"{parsed.scheme}://{parsed.netloc}/wp-json/wp/v2/posts?slug={slug}&_fields=title,content,yoast_head_json"
-    req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "application/json"})
-    try:
-        with urlopen(req, timeout=12) as resp:
-            if "json" not in resp.headers.get("Content-Type", ""):
-                return None
-            data = json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
-
+    domain = parsed.netloc
+    # Probeer eerst de WordPress.com publieke CDN-API (gaat via Automattic, niet geblokkeerd)
+    # Daarna als fallback de lokale wp-json endpoint
+    candidates = [
+        f"https://public-api.wordpress.com/wp/v2/sites/{domain}/posts?slug={slug}&_fields=title,content,yoast_head_json",
+        f"{parsed.scheme}://{domain}/wp-json/wp/v2/posts?slug={slug}&_fields=title,content,yoast_head_json",
+    ]
+    data = None
+    for api_url in candidates:
+        req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "application/json"})
+        try:
+            with urlopen(req, timeout=12) as resp:
+                if "json" not in resp.headers.get("Content-Type", ""):
+                    continue
+                data = json.loads(resp.read().decode("utf-8"))
+                if data and isinstance(data, list):
+                    break
+        except Exception:
+            continue
     if not data or not isinstance(data, list):
         return None
     post = data[0]
