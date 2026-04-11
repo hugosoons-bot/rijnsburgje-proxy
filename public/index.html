@@ -228,8 +228,22 @@ textarea.inp{resize:vertical}
 <div id="mov" onclick="closeOvl(event)">
   <div id="mbox">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <h2 style="font-family:'Playfair Display',serif;font-size:17px;color:var(--text)" id="mtitle">Label bewerken</h2>
+      <h2 style="font-family:'Playfair Display',serif;font-size:17px;color:var(--text)">Recept bewerken</h2>
       <button onclick="sluitModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);line-height:1">✕</button>
+    </div>
+    <span class="sec-label">Titel</span>
+    <input id="m-titel" class="inp" placeholder="Naam van het recept" style="margin-bottom:12px">
+    <span class="sec-label">Omschrijving</span>
+    <input id="m-omschr" class="inp" placeholder="Korte omschrijving (1 zin)" style="margin-bottom:12px">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="flex:1">
+        <span class="sec-label">Personen</span>
+        <input id="m-pers" class="inp" type="number" min="1" max="50" placeholder="4">
+      </div>
+      <div style="flex:1">
+        <span class="sec-label">Afbeelding URL</span>
+        <input id="m-img" class="inp" placeholder="https://...">
+      </div>
     </div>
     <span class="sec-label">Keuken</span>
     <div id="m-k" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
@@ -252,9 +266,15 @@ textarea.inp{resize:vertical}
         <input id="m-tw" class="inp" type="number" min="0" step="5" placeholder="bijv. 60">
       </div>
     </div>
+    <span class="sec-label">Ingrediënten</span>
+    <div id="m-ings" style="margin-bottom:6px"></div>
+    <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMIng()">+ Ingrediënt</button>
+    <span class="sec-label">Bereidingsstappen</span>
+    <div id="m-stps" style="margin-bottom:6px"></div>
+    <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMStap()">+ Stap</button>
     <span class="sec-label">Notities</span>
-    <textarea id="m-n" class="inp" style="min-height:70px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
-    <button class="btn btn-dark btn-w" style="margin-top:14px" onclick="saveModal()">Opslaan</button>
+    <textarea id="m-n" class="inp" style="min-height:70px;margin-bottom:14px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
+    <button class="btn btn-dark btn-w" onclick="saveModal()">Opslaan</button>
   </div>
 </div>
 
@@ -307,7 +327,7 @@ let S={
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
-  editId:null,mK:'',mC:'',mTags:[],
+  editId:null,mK:'',mC:'',mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
@@ -349,7 +369,13 @@ function fromSB(row){
 }
 async function savRecept(r){
   if(!S.gebruiker){console.warn('savRecept: niet ingelogd, sla niet op');return;}
-  const{error}=await DB.from('recipes').upsert(toSB(r));
+  const row=toSB(r);
+  let{error}=await DB.from('recipes').upsert(row);
+  if(error&&(error.message.includes('prep_time')||error.message.includes('wait_time'))){
+    // Kolommen bestaan nog niet — sla op zonder tijdvelden (fallback)
+    const{prep_time,wait_time,...rest}=row;
+    ({error}=await DB.from('recipes').upsert(rest));
+  }
   if(error)console.error('Opslaan mislukt:',error.message);
 }
 async function togglePubliek(id){
@@ -654,15 +680,22 @@ function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));render(
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openEdit(id){
   const r=S.recepten.find(x=>x.id===id);if(!r)return;
-  S.editId=id;S.mK=r.keuken||'';S.mC=r.categorie||'';S.mTags=[...(r.tags||[])];
-  document.getElementById('mtitle').textContent='✏️ '+r.titel;
+  S.editId=id;
+  S.mK=r.keuken||'';S.mC=r.categorie||'';
+  S.mTags=[...(r.tags||[])];
+  S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
+  S.mStps=[...(r.stappen||[])];
+  document.getElementById('m-titel').value=r.titel||'';
+  document.getElementById('m-omschr').value=r.omschrijving||'';
+  document.getElementById('m-pers').value=r.personen||4;
+  document.getElementById('m-img').value=r.afbeelding||'';
   document.getElementById('m-n').value=r.notities||'';
   document.getElementById('m-tb').value=r.tijdBereiding||'';
   document.getElementById('m-tw').value=r.tijdWacht||'';
   document.getElementById('m-ti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC===c?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
-  rMT();
+  rMT();rMIngs();rMStps();
   document.getElementById('mov').classList.add('open');
 }
 function tMK(k){S.mK=S.mK===k?'':k;document.querySelectorAll('#m-k .cat-btn').forEach(b=>b.classList.toggle('ak',b.textContent===S.mK));}
@@ -670,9 +703,34 @@ function tMC(c){S.mC=S.mC===c?'':c;document.querySelectorAll('#m-c .cat-btn').fo
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
 function rmMT(i){S.mTags.splice(i,1);rMT();}
 function addMTag(){const inp=document.getElementById('m-ti'),t=inp.value.trim();if(t&&!S.mTags.includes(t)){S.mTags.push(t);rMT();}inp.value='';}
+function rMIngs(){
+  document.getElementById('m-ings').innerHTML=S.mIngs.map((ing,i)=>`
+    <div style="display:flex;gap:5px;margin-bottom:5px;align-items:center">
+      <input class="inp" style="width:54px;text-align:center" type="number" min="0" step="0.1" value="${ing.hoeveelheid||''}" oninput="S.mIngs[${i}].hoeveelheid=parseFloat(this.value)||0" placeholder="hv">
+      <input class="inp" style="width:46px" value="${h(ing.eenheid||'')}" oninput="S.mIngs[${i}].eenheid=this.value.trim()" placeholder="st">
+      <input class="inp" style="flex:1" value="${h(ing.naam||'')}" oninput="S.mIngs[${i}].naam=this.value" placeholder="naam">
+      <button onclick="S.mIngs.splice(${i},1);rMIngs()" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 4px;line-height:1">✕</button>
+    </div>`).join('');
+}
+function addMIng(){S.mIngs.push({naam:'',hoeveelheid:1,eenheid:'st'});rMIngs();setTimeout(()=>{const rows=document.querySelectorAll('#m-ings .inp');if(rows.length)rows[rows.length-3].focus();},50);}
+function rMStps(){
+  document.getElementById('m-stps').innerHTML=S.mStps.map((s,i)=>`
+    <div style="display:flex;gap:5px;margin-bottom:5px;align-items:flex-start">
+      <span style="min-width:20px;padding-top:10px;font-size:12px;font-weight:600;color:var(--text3)">${i+1}.</span>
+      <textarea class="inp" rows="2" style="flex:1;resize:vertical;font-size:13px" oninput="S.mStps[${i}]=this.value">${h(s)}</textarea>
+      <button onclick="S.mStps.splice(${i},1);rMStps()" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:4px;line-height:1">✕</button>
+    </div>`).join('');
+}
+function addMStap(){S.mStps.push('');rMStps();setTimeout(()=>{const rows=document.querySelectorAll('#m-stps textarea');if(rows.length)rows[rows.length-1].focus();},50);}
 async function saveModal(){
   const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;
+  r.titel=document.getElementById('m-titel').value.trim()||r.titel;
+  r.omschrijving=document.getElementById('m-omschr').value.trim();
+  r.personen=parseInt(document.getElementById('m-pers').value)||r.personen||4;
+  r.afbeelding=document.getElementById('m-img').value.trim();
   r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;
+  r.ingredienten=S.mIngs.filter(i=>i.naam.trim());
+  r.stappen=S.mStps.filter(s=>s.trim());
   r.notities=document.getElementById('m-n').value;
   r.tijdBereiding=parseInt(document.getElementById('m-tb').value)||0;
   r.tijdWacht=parseInt(document.getElementById('m-tw').value)||0;
