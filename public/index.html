@@ -453,7 +453,8 @@ async function toggleLike(recipeId){
   rIP();
 }
 async function loadRecepten(){
-  const{data,error}=await DB.from('recipes').select('*').order('created_at',{ascending:false});
+  if(!S.gebruiker){S.recepten=DEMO;return;}
+  const{data,error}=await DB.from('recipes').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
   if(error){console.error('Laden mislukt:',error.message);S.recepten=DEMO;return;}
   S.recepten=data.length>0?data.map(fromSB):DEMO;
 }
@@ -559,7 +560,22 @@ async function laadFeedMenus(){
 // ── Mutations ─────────────────────────────────────────────────────────────────
 function setTab(t){S.tab=t;S.fout='';render();}
 async function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;render();await savRecept(r);}}
-async function delRec(id){S.recepten=S.recepten.filter(r=>r.id!==id);S.geselecteerd=S.geselecteerd.filter(x=>x!==id);delete S.weekPers[id];sav();render();await DB.from('recipes').delete().eq('id',id);}
+async function delRec(id){
+  const backup=S.recepten.find(r=>r.id===id);
+  S.recepten=S.recepten.filter(r=>r.id!==id);
+  S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
+  delete S.weekPers[id];
+  render();
+  if(S.gebruiker){
+    const{error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id);
+    if(error){
+      console.error('Verwijderen mislukt:',error.message);
+      if(backup)S.recepten.push(backup);
+      S.fout='Verwijderen mislukt: '+error.message;
+      render();
+    }
+  }
+}
 async function saveRes(idx){
   const r=S.resultaten[idx];if(!r)return;
   const n={...r,opgeslagen:true,datum:new Date().toISOString().split('T')[0],tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',afbeelding:r.afbeelding||''};
