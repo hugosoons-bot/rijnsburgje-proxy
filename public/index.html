@@ -332,6 +332,7 @@ function fromSB(row){
   };
 }
 async function savRecept(r){
+  if(!S.gebruiker){console.warn('savRecept: niet ingelogd, sla niet op');return;}
   const{error}=await DB.from('recipes').upsert(toSB(r));
   if(error)console.error('Opslaan mislukt:',error.message);
 }
