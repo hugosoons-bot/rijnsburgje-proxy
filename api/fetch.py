@@ -404,19 +404,24 @@ def _try_wp_api(url: str) -> dict | None:
         f"{parsed.scheme}://{domain}/wp-json/wp/v2/posts?slug={slug}&_fields=title,content,yoast_head_json",
     ]
     data = None
+    wp_errors = []
     for api_url in candidates:
         req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "application/json"})
         try:
-            with urlopen(req, timeout=12) as resp:
-                if "json" not in resp.headers.get("Content-Type", ""):
+            with urlopen(req, timeout=10) as resp:
+                ct = resp.headers.get("Content-Type", "")
+                if "json" not in ct:
+                    wp_errors.append(f"no-json({ct[:40]})")
                     continue
                 data = json.loads(resp.read().decode("utf-8"))
                 if data and isinstance(data, list):
                     break
-        except Exception:
+                wp_errors.append(f"leeg({type(data).__name__})")
+        except Exception as e:
+            wp_errors.append(f"{type(e).__name__}:{str(e)[:60]}")
             continue
     if not data or not isinstance(data, list):
-        return None
+        return {"_wp_debug": "; ".join(wp_errors) or "geen data"}
     post = data[0]
     content_html = (post.get("content") or {}).get("rendered", "")
     if not content_html:
@@ -454,25 +459,26 @@ def fetch_and_extract(url: str) -> dict:
 
     try:
         html, final_url = _html_fetch(opener, url)
-    except (RemoteDisconnected, ConnectionResetError):
-        # Server sloot verbinding zonder antwoord — probeer WordPress REST API
+    except (RemoteDisconnected, ConnectionResetError) as e:
         wp = _try_wp_api(url)
-        if wp:
+        if wp and "_wp_debug" not in wp:
             return wp
-        return {"error": "De server sloot de verbinding. Mogelijk blokkeert deze site geautomatiseerde verzoeken."}
+        debug = (wp or {}).get("_wp_debug", "")
+        return {"error": f"[RemoteDisconnected] {e} | wp-api: {debug}"}
     except HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.reason}"}
     except URLError as e:
-        # URLError kan ook een RemoteDisconnected inpakken
         if isinstance(e.reason, (RemoteDisconnected, ConnectionResetError)):
             wp = _try_wp_api(url)
-            if wp:
+            if wp and "_wp_debug" not in wp:
                 return wp
-        return {"error": f"Kon pagina niet bereiken: {e.reason}"}
+            debug = (wp or {}).get("_wp_debug", "")
+            return {"error": f"[URLError/RemoteDisconnected] {e.reason} | wp-api: {debug}"}
+        return {"error": f"[URLError] {e.reason}"}
     except ValueError as e:
         return {"error": str(e)}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"[{type(e).__name__}] {e}"}
 
     # Check of we op een auth/loginpagina zijn beland
     ext1 = RecipeExtractor()
