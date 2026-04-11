@@ -1077,7 +1077,7 @@ function renderVrienden(){
       <div class="friend-avatar">${init}</div>
       <span class="friend-name">${h(p.display_name)}</span>
       ${showOntvolg?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
-      ${showTerug&&!volgtIds.has(p.id)?`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgterug</button>`:''}
+      ${showTerug&&!volgtIds.has(p.id)?`<button class="btn btn-dark" onclick="volg('${p.id}')">Volg terug</button>`:''}
       ${showTerug&&volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
     </div>`;
   }
