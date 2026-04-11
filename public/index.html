@@ -799,6 +799,18 @@ REGELS — verplicht:
 7. VERIFICATIE voor je de JSON afrondt: is elk ingrediënt aantoonbaar zichtbaar in de afbeelding? Is de volgorde van de stappen correct? Verwijder alles wat je niet zeker weet.
 Datum: gebruik DATUM.`;
 
+const SYS_SHOP=`Geef ALLEEN een pure JSON array van strings. Geen uitleg, geen backticks.
+Jij krijgt een lijst ingrediënten met berekende hoeveelheden voor een boodschappenlijst.
+Formuleer elk ingrediënt in correct Nederlands als één zin, klaar om op te schrijven.
+Regels:
+1. Hoeveelheid + eenheid + naam samenvoegen: "400g spaghetti", "3 eieren", "1 grote ui"
+2. Correcte Nederlandse meervouden: ei→eieren, ui→uien, blik→blikken, teen→teentjes, tak→takken, plak→plakken, blaadje→blaadjes, bol→bollen, schijf→schijven
+3. Rond hoeveelheden zinvol af: 266.7g→270g, 133g→130g, 2.3 eieren→2 eieren, 1.8 eieren→2 eieren
+4. Breuken voor kleine hoeveelheden: 0.5→½, 0.25→¼, 0.75→¾, 1.5→1½
+5. Eenheid "x" of "st" weglaten bij telbaren: "1 x ui"→"1 ui", "2 st eieren"→"2 eieren"
+6. Behoud de volgorde exact gelijk aan de input
+7. Voeg niks toe, verwijder niks — alleen herformuleren`;
+
 // ── Goedgekeurde receptsites ──────────────────────────────────────────────────
 const RECEPTSITES=[
   // Nederlands
@@ -1130,9 +1142,24 @@ function bouwShop(){
   items.forEach(ni=>{const o=S.shopItems.find(x=>x.naam.toLowerCase()===ni.naam.toLowerCase()&&x.eenheid===ni.eenheid&&!x.extra);if(o)ni.done=o.done;});
   S.shopItems=[...items,...S.extraItems.map(e=>({...e,afd:e.afd||getAfd(e.naam)}))];
 }
+async function verbeterBoodschappen(){
+  const recepItems=S.shopItems.filter(i=>!i.extra);
+  if(!recepItems.length)return;
+  try{
+    const input=recepItems.map(i=>({hoeveelheid:i.hoeveelheid,eenheid:i.eenheid||'',naam:i.naam}));
+    const result=await callAPI([{role:'user',content:`Reformuleer deze ingrediënten voor een boodschappenlijst:\n${JSON.stringify(input)}`}],false,800,SYS_SHOP);
+    if(Array.isArray(result)&&result.length===recepItems.length){
+      recepItems.forEach((item,i)=>{
+        if(typeof result[i]==='string'&&result[i].trim())item.naam=result[i].trim();
+      });
+    }
+  }catch(e){console.warn('Reformuleren mislukt, gebruik ruwe hoeveelheden:',e.message);}
+}
 async function maakBoodschappenlijst(){
-  bouwShop();setTab('boodschappen');
+  bouwShop();setTab('boodschappen');render();
+  await verbeterBoodschappen();
   if(S.gebruiker&&S.menuId)await slaBoodschappenlijstOp();
+  else render();
 }
 async function slaBoodschappenlijstOp(){
   const{data:bestaand}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',S.menuId).maybeSingle();
@@ -1528,7 +1555,7 @@ function renderBoodschappen(){
           <div class="sitem" style="background:${g.k}">
             <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
             <span class="sname" onclick="toggleShop(${item.idx})">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
-            <span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>
+            ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
             <button class="sdel" onclick="delShop(${item.idx})">✕</button>
           </div>`).join('')}
       </div>`).join('')}
@@ -1545,7 +1572,7 @@ function renderBoodschappen(){
           return`<div class="sitem done" style="background:white">
             <div class="scb done" onclick="toggleShop(${idx})">✓</div>
             <span class="sname done">${h(item.naam)}</span>
-            <span class="sqty" style="opacity:.6">${item.hoeveelheid} ${h(item.eenheid)}</span>
+            ${item.extra?`<span class="sqty" style="opacity:.6">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
             <button class="sdel" onclick="delShop(${idx})">✕</button>
           </div>`;}).join('')}</div>`:''}
       </div>`:''}
