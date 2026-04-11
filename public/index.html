@@ -260,7 +260,7 @@ let S={
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',
-  zoekIngr:'',zoekTermVal:'',
+  zoekIngr:'',zoekTermVal:'',zoekLinks:[],
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
   editId:null,mK:'',mC:'',mTags:[],
@@ -598,11 +598,21 @@ Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredi
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
 REGELS — verplicht:
-1. Neem ingrediënten en stappen LETTERLIJK over uit de transcriptie. Geen parafrasering.
-2. Vage hoeveelheden ("handjevol", "naar smaak", "scheut"): zet volledige omschrijving in naam, hoeveelheid=1, eenheid="x".
-3. Onleesbare tekst: neem "[ONLEESBAAR]" letterlijk op in het naam- of stap-veld. Nooit gokken.
-4. VERIFICATIE voor je de JSON afrondt: loop elk ingrediënt en elke stap na. Staat het aantoonbaar in de transcriptie? Zo niet — verwijder het. Voeg nooit iets toe dat niet in de transcriptie staat.
+1. Lees de afbeelding zorgvuldig van boven naar beneden. Let op meerdere kolommen: lees kolom voor kolom, niet rij voor rij.
+2. Neem ingrediënten en stappen LETTERLIJK over. Geen parafrasering, geen samenvoegen.
+3. Hoeveelheden: als een getal en een eenheid naast een ingredient staan (ook in een aparte kolom), koppel ze correct. Zet hoeveelheid als getal, eenheid als string.
+4. Vage hoeveelheden ("handjevol", "naar smaak", "scheut", "snuf"): zet volledige omschrijving in naam, hoeveelheid=1, eenheid="x".
+5. Onleesbare tekst: schrijf "[ONLEESBAAR]" letterlijk in het veld. Gok nooit.
+6. VERIFICATIE voor je de JSON afrondt: is elk ingrediënt aantoonbaar zichtbaar in de afbeelding? Is de volgorde van de stappen correct? Verwijder alles wat je niet zeker weet.
 Datum: gebruik DATUM.`;
+
+// ── Goedgekeurde receptsites ──────────────────────────────────────────────────
+const RECEPTSITES=[
+  {naam:'Chicks Love Food', domein:'chickslovefood.com', zoek:'https://www.chickslovefood.com/?s={q}'},
+  {naam:'Lekker en Simpel',  domein:'lekkerensimpel.nl',  zoek:'https://www.lekkerensimpel.nl/?s={q}'},
+  {naam:'15gram',            domein:'15gram.nl',           zoek:'https://www.15gram.nl/?s={q}'},
+  {naam:'Smulweb',           domein:'smulweb.nl',          zoek:'https://www.smulweb.nl/recepten?query={q}'},
+];
 
 async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
   const sys=(sysOverride||SYS).replace('DATUM',new Date().toISOString().split('T')[0]);
@@ -633,20 +643,22 @@ async function zoekTerm(){
   bewaarZoekVelden();
   const ingr=S.zoekIngr.trim();
   const term=S.zoekTermVal.trim();
-  let prompt='Zoek 3 recepten';
-  if(S.zoekDieet!=='alles')prompt+=` die ${S.zoekDieet} zijn`;
-  if(S.zoekKeuken!=='Alle')prompt+=` uit de ${S.zoekKeuken} keuken`;
-  if(ingr)prompt+=` met ${ingr}`;
-  if(S.zoekTijd)prompt+=`, bereidingstijd ${S.zoekTijd}`;
-  if(term)prompt+=`, zoekterm: "${term}"`;
-  prompt+='. Geef echte werkende bronlinks. JSON array.';
-  S.laden=true;S.fout='';S.resultaten=[];render();
-  try{
-    const parsed=await callAPI([{role:'user',content:prompt}],false);
-    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recepten gevonden');
-    S.resultaten=normaliseer(parsed,'');
-  }catch(e){S.fout=e.message;}
-  finally{S.laden=false;render();}
+  if(!ingr&&!term){S.fout='Vul een ingrediënt of zoekterm in';rIP();return;}
+  const q=encodeURIComponent([ingr,term].filter(Boolean).join(' '));
+  S.laden=true;S.fout='';S.zoekLinks=[];render();
+  const alle=await Promise.all(RECEPTSITES.map(async site=>{
+    try{
+      const url=site.zoek.replace('{q}',q);
+      const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
+      if(!r.ok)return[];
+      const d=await r.json();
+      return(d.links||[]).map(l=>({...l,site:site.naam}));
+    }catch{return[];}
+  }));
+  S.zoekLinks=alle.flat();
+  S.laden=false;
+  if(!S.zoekLinks.length)S.fout='Geen recepten gevonden op de zoeksites. Probeer een andere zoekterm.';
+  render();
 }
 
 async function zoekUrl(){
@@ -656,8 +668,31 @@ async function zoekUrl(){
     const pr=await fetch('/fetch?url='+encodeURIComponent(q));
     if(!pr.ok){const e=await pr.json().catch(()=>({}));throw new Error(e?.error||'Kon pagina niet ophalen');}
     const pd=await pr.json();
+
+    // JSON-LD gevonden? Gebruik die direct — veel betrouwbaarder dan tekst
+    if(pd.schema_recept){
+      const sr=pd.schema_recept;
+      const datum=new Date().toISOString().split('T')[0];
+      const recept={
+        id:'r'+Date.now()+Math.random().toString(36).slice(2),
+        titel:sr.titel||'Recept',
+        omschrijving:sr.omschrijving||'',
+        personen:sr.personen||4,
+        ingredienten:sr.ingredienten||[],
+        stappen:sr.stappen||[],
+        keuken:sr.keuken||'',
+        categorie:'',tags:[],notities:'',
+        bron:q,
+        afbeelding:sr.afbeelding||pd.image||'',
+        rating:0,opgeslagen:false,datum,
+      };
+      S.resultaten=[recept];
+      return;
+    }
+
+    // Geen JSON-LD: stuur tekst naar Claude
     if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
-    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${q}\n\n${pd.text.slice(0,4000)}`}]);
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${q}\n\n${pd.text.slice(0,5000)}`}]);
     if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,q);
@@ -937,28 +972,27 @@ function renderZoeken(){
 
   let paneel='';
   if(S.ontdekTab==='zoeken'){
+    const siteNamen=RECEPTSITES.map(s=>s.naam).join(', ');
+    const linkHTML=S.zoekLinks.length?`
+      <div style="margin-top:16px">
+        <p style="font-size:12px;color:var(--text3);margin-bottom:10px">${S.zoekLinks.length} resultaten van echte receptsites — klik om het recept te importeren</p>
+        ${S.zoekLinks.map(l=>`
+          <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="importeerLink('${h(l.url)}')">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(l.titel)}</div>
+              <div style="font-size:11px;color:var(--text3)">${h(l.site)}</div>
+            </div>
+            <span style="font-size:12px;color:var(--accent);flex-shrink:0">Importeer →</span>
+          </div>`).join('')}
+      </div>`:'';
     paneel=`
+      <p class="search-hint" style="margin-bottom:12px">Zoekt op echte receptsites: ${siteNamen}. Klik op een resultaat om het recept te importeren.</p>
       <div style="margin-bottom:12px">
-        <span class="sec-label">Ingrediënt</span>
-        <input id="z-ingr" class="inp" placeholder="bijv. courgette, kip, linzen..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
+        <span class="sec-label">Ingrediënt of zoekterm</span>
+        <input id="z-ingr" class="inp" placeholder="bijv. courgette, kip, lasagne..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
       </div>
-      <div style="margin-bottom:12px">
-        <span class="sec-label">Zoekterm (optioneel)</span>
-        <input id="z-term" class="inp" placeholder="bijv. lasagne of snelle pasta" value="${h(S.zoekTermVal)}" onkeydown="if(event.key==='Enter')zoekTerm()">
-      </div>
-      <div style="margin-bottom:12px">
-        <span class="sec-label">Bereidingstijd</span>
-        <div class="filter-row">${tijden.map(t=>{const v=t==='Alle'?'':t;return`<button class="fb${S.zoekTijd===v?' on':''}" onclick="S.zoekTijd='${v}';rIP()">${t}</button>`;}).join('')}</div>
-      </div>
-      <div style="margin-bottom:12px">
-        <span class="sec-label">Dieet</span>
-        <div class="filter-row">${dieten.map(d=>`<button class="fb${S.zoekDieet===d.v?' on':''}" onclick="S.zoekDieet='${d.v}';rIP()">${d.l}</button>`).join('')}</div>
-      </div>
-      <div style="margin-bottom:16px">
-        <span class="sec-label">Keuken</span>
-        <div class="filter-row">${['Alle',...KEUKEN].map(k=>`<button class="fb${S.zoekKeuken===k?' on':''}" onclick="S.zoekKeuken='${k}';rIP()">${k}</button>`).join('')}</div>
-      </div>
-      <button class="btn btn-accent btn-w" onclick="zoekTerm()" ${busy?'disabled':''}>${busy?'Zoeken...':'Zoeken →'}</button>`;
+      <button class="btn btn-accent btn-w" onclick="zoekTerm()" ${busy?'disabled':''}>${busy?'Zoeken op receptsites...':'Zoeken op receptsites →'}</button>
+      ${linkHTML}`;
   } else if(S.ontdekTab==='url'){
     paneel=`
       <span class="sec-label">Plak een recept-URL</span>
@@ -985,7 +1019,7 @@ function renderZoeken(){
     ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)}</div>`:''}
     ${S.resultaten.length>0
       ?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden</p><div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
-      :(!busy?'<div class="hint">Stel filters in en zoek, plak een URL, of upload een foto.</div>':'<div class="hint">Even geduld...</div>')}`;
+      :(S.ontdekTab==='zoeken'?'':(!busy?'<div class="hint">Plak een URL of upload een foto om een recept te importeren.</div>':'<div class="hint">Even geduld...</div>'))}`;
 }
 
 function renderWeekmenu(){
@@ -1264,9 +1298,33 @@ function render(){
 }
 function bewaarZoekVelden(){
   const ingr=document.getElementById('z-ingr');
-  const term=document.getElementById('z-term');
   if(ingr)S.zoekIngr=ingr.value;
-  if(term)S.zoekTermVal=term.value;
+}
+async function importeerLink(url){
+  S.zoekUrl=url;S.laden=true;S.fout='';S.resultaten=[];S.ontdekTab='url';render();
+  try{
+    const pr=await fetch('/fetch?url='+encodeURIComponent(url));
+    if(!pr.ok){const e=await pr.json().catch(()=>({}));throw new Error(e?.error||'Kon pagina niet ophalen');}
+    const pd=await pr.json();
+    if(pd.schema_recept){
+      const sr=pd.schema_recept;
+      const datum=new Date().toISOString().split('T')[0];
+      S.resultaten=[{
+        id:'r'+Date.now()+Math.random().toString(36).slice(2),
+        titel:sr.titel||'Recept',omschrijving:sr.omschrijving||'',
+        personen:sr.personen||4,ingredienten:sr.ingredienten||[],stappen:sr.stappen||[],
+        keuken:sr.keuken||'',categorie:'',tags:[],notities:'',bron:url,
+        afbeelding:sr.afbeelding||pd.image||'',rating:0,opgeslagen:false,datum,
+      }];
+      return;
+    }
+    if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${url}\n\n${pd.text.slice(0,5000)}`}]);
+    if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
+    S.resultaten=normaliseer(parsed,url);
+  }catch(e){S.fout=e.message;}
+  finally{S.laden=false;render();}
 }
 function rIP(){const y=window.scrollY;bewaarZoekVelden();render();window.scrollTo(0,y);}
 window.addEventListener('DOMContentLoaded',async()=>{
