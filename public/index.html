@@ -888,8 +888,16 @@ async function zoekTerm(){
   const ingr=S.zoekIngr.trim();
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
-    const q=bouwZoekQuery(ingr);
-    const links=await verzamelLinks(q,ingr);
+    // Bouw zoekopdracht en zoek via DuckDuckGo
+    const delen=[ingr];
+    if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
+    if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
+    if(S.zoekTijd==='30')delen.push('snel');
+    const zoekterm=(delen.filter(Boolean).join(' ')||'recept');
+    const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(zoekterm));
+    if(!r.ok)throw new Error('Zoeken mislukt');
+    const d=await r.json();
+    const links=(d.links||[]);
     S.zoekLinks=links;
     if(!links.length){S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';return;}
     await autoImportTopLinks(links,5);
@@ -914,11 +922,14 @@ async function verasMe(){
     );
     if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Kon geen suggesties bedenken');
 
-    // Stap 2: Zoek beide termen parallel op de sites
-    // Gebruik de gerechtnaam direct — Claude heeft al rekening gehouden met de filters,
-    // dus keuken/dieet NIET nogmaals toevoegen aan de query (dat geeft 0 resultaten)
+    // Stap 2: Zoek beide termen parallel via DuckDuckGo
     const [links1,links2]=await Promise.all(
-      zoektermen.slice(0,2).map(term=>verzamelLinks(encodeURIComponent(term),term))
+      zoektermen.slice(0,2).map(async term=>{
+        const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(term));
+        if(!r.ok)return[];
+        const d=await r.json();
+        return d.links||[];
+      })
     );
 
     // Stap 3: Importeer 1 recept per term

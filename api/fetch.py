@@ -6,7 +6,7 @@ Extraheert ook JSON-LD (schema.org/Recipe) als die aanwezig is.
 """
 
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, quote_plus
 from urllib.request import Request, urlopen, build_opener, HTTPCookieProcessor
 from urllib.error import URLError, HTTPError
 from http.client import RemoteDisconnected
@@ -366,6 +366,64 @@ def fetch_links(url: str) -> dict:
     return {"links": results}
 
 
+# Bekende receptdomeinen — links buiten deze lijst worden genegeerd in DDG-resultaten
+RECEPT_DOMEINEN = {
+    "allerhande.nl", "leukerecepten.nl", "lekkerensimpel.nl",
+    "chickslovefood.com", "15gram.nl", "smulweb.nl", "foodies.nl",
+    "miljuschka.nl", "rudolphsbakery.nl", "24kitchen.nl", "culy.nl",
+    "bettyskitchen.nl", "dillekamille.nl", "seriouseats.com",
+    "cooking.nytimes.com", "budgetbytes.com", "themediterraneandish.com",
+    "ottolenghi.co.uk", "bonappetit.com", "minimalistbaker.com",
+    "halfbakedharvest.com", "pinchofyum.com", "ah.nl", "jamieoliver.com",
+    "deliciousmagazine.nl", "jumbo.com", "recepten.nl",
+}
+
+
+def fetch_ddg_links(query: str) -> dict:
+    """Zoek via DuckDuckGo HTML-endpoint en extraheer links van bekende receptsites."""
+    # Voeg 'recept' toe zodat DDG meer receptpagina's teruggeeft
+    zoekterm = query if "recept" in query.lower() else query + " recept"
+    ddg_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(zoekterm)
+
+    headers = {**BROWSER_HEADERS, "Referer": "https://duckduckgo.com/"}
+    req = Request(ddg_url, headers=headers)
+    try:
+        with urlopen(req, timeout=10) as resp:
+            raw = resp.read()
+            enc = resp.headers.get("Content-Encoding", "")
+            if enc == "gzip" or raw[:2] == b"\x1f\x8b":
+                try:
+                    raw = gzip.decompress(raw)
+                except Exception:
+                    pass
+            html = raw.decode("utf-8", errors="replace")
+    except Exception as e:
+        return {"error": str(e)}
+
+    # DDG-redirect-links bevatten de echte URL als uddg= parameter
+    # Formaat: //duckduckgo.com/l/?uddg=https%3A%2F%2F...
+    uddg_hits = re.findall(r'uddg=([^&">\s]+)', html)
+    seen = set()
+    results = []
+    for encoded in uddg_hits:
+        url = unquote(encoded)
+        if not url.startswith("http"):
+            continue
+        parsed = urlparse(url)
+        domain = parsed.netloc.lstrip("www.")
+        if not any(domain == d or domain.endswith("." + d) for d in RECEPT_DOMEINEN):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        # Titel halen we uit de html via context (simpele benadering: domein als fallback)
+        results.append({"url": url, "titel": domain, "site": "DuckDuckGo"})
+        if len(results) >= 15:
+            break
+
+    return {"links": results}
+
+
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -631,6 +689,16 @@ class handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         url_param = params.get("url", [None])[0]
         mode = params.get("mode", ["full"])[0]
+        q_param = params.get("q", [None])[0]
+
+        # DDG-zoekmodus: geen URL nodig, alleen q=
+        if mode == "ddg":
+            if not q_param:
+                self.send_json(400, {"error": "Geen zoekterm (q) meegegeven"})
+                return
+            result = fetch_ddg_links(unquote(q_param))
+            self.send_json(502 if "error" in result else 200, result)
+            return
 
         if not url_param:
             self.send_json(400, {"error": "Geen URL meegegeven"})
