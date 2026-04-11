@@ -806,8 +806,10 @@ async function verasMe(){
     if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Kon geen suggesties bedenken');
 
     // Stap 2: Zoek beide termen parallel op de sites
+    // Gebruik de gerechtnaam direct — Claude heeft al rekening gehouden met de filters,
+    // dus keuken/dieet NIET nogmaals toevoegen aan de query (dat geeft 0 resultaten)
     const [links1,links2]=await Promise.all(
-      zoektermen.slice(0,2).map(term=>verzamelLinks(bouwZoekQuery(term),term))
+      zoektermen.slice(0,2).map(term=>verzamelLinks(encodeURIComponent(term),term))
     );
 
     // Stap 3: Importeer 1 recept per term
