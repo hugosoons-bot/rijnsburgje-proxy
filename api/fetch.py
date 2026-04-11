@@ -285,21 +285,19 @@ class LinkExtractor(HTMLParser):
 
 def fetch_links(url: str) -> dict:
     """Haal alle links op van een zoekresultatenpagina."""
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-    }
-    req = Request(url, headers=headers)
+    req = Request(url, headers=BROWSER_HEADERS)
     try:
-        with urlopen(req, timeout=12) as resp:
+        with urlopen(req, timeout=10) as resp:
             if "html" not in resp.headers.get("Content-Type", ""):
                 return {"error": "Geen HTML pagina"}
-            html = resp.read().decode("utf-8", errors="replace")
+            raw = resp.read()
+            enc = resp.headers.get("Content-Encoding", "")
+            if enc == "gzip" or (raw[:2] == b"\x1f\x8b"):
+                try:
+                    raw = gzip.decompress(raw)
+                except Exception:
+                    pass
+            html = raw.decode("utf-8", errors="replace")
     except HTTPError as e:
         return {"error": f"HTTP {e.code}"}
     except Exception as e:
@@ -355,7 +353,7 @@ def fetch_links(url: str) -> dict:
             continue
         # Accepteer als het pad recept-achtig is OF de titel lang genoeg is (echte receptnamen)
         pad_ok = any(w in path for w in RECEPT_WOORDEN_PAD)
-        titel_ok = len(titel) > 15  # Echte receptnamen zijn doorgaans lang
+        titel_ok = len(titel) > 8  # Echte receptnamen zijn doorgaans langer dan 8 tekens
         if not pad_ok and not titel_ok:
             continue
         if href in seen:
