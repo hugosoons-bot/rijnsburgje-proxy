@@ -566,14 +566,17 @@ async function delRec(id){
   S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
   delete S.weekPers[id];
   render();
-  if(S.gebruiker){
-    const{error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id);
-    if(error){
-      console.error('Verwijderen mislukt:',error.message);
-      if(backup)S.recepten.push(backup);
-      S.fout='Verwijderen mislukt: '+error.message;
-      render();
-    }
+  if(!S.gebruiker)return;
+  // Probeer eerst met user_id filter; als 0 rijen gematcht, probeer zonder (voor recepten opgeslagen zonder user_id)
+  let{data,error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id).select('id');
+  if(!error&&(!data||data.length===0)){
+    ({data,error}=await DB.from('recipes').delete().eq('id',id).select('id'));
+  }
+  if(error){
+    console.error('Verwijderen mislukt:',error.message);
+    if(backup){S.recepten=[backup,...S.recepten.filter(r=>r.id!==id)];}
+    S.fout='Verwijderen mislukt: '+error.message;
+    render();
   }
 }
 async function saveRes(idx){
