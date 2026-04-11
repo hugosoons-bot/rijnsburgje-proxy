@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen, build_opener, HTTPCookieProcessor
 from urllib.error import URLError, HTTPError
 from http.cookiejar import CookieJar
 from html.parser import HTMLParser
+import gzip
 import json
 
 
@@ -350,7 +351,9 @@ BROWSER_HEADERS = {
     ),
     "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 OAUTH_HOSTS = ("token.roularta.nl", "login.roularta.nl", "accounts.google.com",
@@ -379,7 +382,10 @@ def _html_fetch(opener, url: str, timeout: int = 12):
         content_type = resp.headers.get("Content-Type", "")
         if "html" not in content_type:
             raise ValueError(f"Geen HTML pagina ({content_type})")
-        return resp.read().decode("utf-8", errors="replace"), getattr(resp, "url", url)
+        raw = resp.read()
+        if resp.headers.get("Content-Encoding", "") == "gzip":
+            raw = gzip.decompress(raw)
+        return raw.decode("utf-8", errors="replace"), getattr(resp, "url", url)
 
 
 def fetch_and_extract(url: str) -> dict:
