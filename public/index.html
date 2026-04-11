@@ -46,6 +46,7 @@ a{color:var(--accent);text-decoration:none}
 .rcard-img{height:140px;background:linear-gradient(135deg,var(--surface2) 0%,var(--border) 100%);display:flex;align-items:center;justify-content:center;font-size:48px;position:relative}
 .rcard-img-emoji{font-size:52px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.1))}
 .sel-badge{position:absolute;top:10px;right:10px;background:var(--accent);color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.tijd-sticker{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);color:#fff;font-size:11px;font-weight:600;padding:3px 7px;border-radius:20px;letter-spacing:.3px;pointer-events:none}
 .rcard-body{padding:14px 16px 10px}
 .rcard-labels{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
 .lbl{border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600;letter-spacing:.03em;display:inline-flex;align-items:center;gap:3px}
@@ -617,37 +618,44 @@ function extractJSON(txt){
   }
 }
 
+const SCHEMA_VELD=`{"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"tijdBereiding":0,"tijdWacht":0,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}`;
+const SCHEMA_UITLEG=`tijdBereiding: actieve kooktijd in minuten (0 = onbekend). tijdWacht: passieve wacht-/rusttijd in minuten zoals marineren, rijzen, afkoelen (0 = geen/onbekend).`;
+
 const SYS=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
-Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Per recept: ${SCHEMA_VELD}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+${SCHEMA_UITLEG}
 Ingrediënten en stappen letterlijk overnemen. Nederlands. Bron: echte werkende URL van de receptpagina.`;
 
 const SYS_URL=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
-Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Per recept: ${SCHEMA_VELD}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+${SCHEMA_UITLEG}
 ABSOLUTE REGELS — overtreding is niet toegestaan:
 1. Neem ALLEEN ingrediënten over die letterlijk in de aangeleverde tekst staan. Voeg NOOIT een ingrediënt toe dat niet expliciet vermeld wordt.
 2. Neem hoeveelheden EXACT over zoals ze in de tekst staan. Verander NOOIT een hoeveelheid.
 3. Neem eenheden EXACT over (g, ml, el, tl, stuks, etc.). Verander NOOIT een eenheid.
 4. Als een ingrediënt of hoeveelheid niet duidelijk leesbaar is: zet de ruwe tekst in het naam-veld, hoeveelheid=1, eenheid="x". Gok nooit.
-5. Neem bereidingstijd over als die vermeld staat (in het omschrijving- of notities-veld).
+5. tijdBereiding en tijdWacht invullen als vermeld, anders 0.
 6. Zet de introductietekst of beschrijving van het recept in het notities-veld.
 7. Als de tekst geen herkenbaar recept bevat: geef een lege array [].
 Datum: gebruik DATUM.`;
 
 const SYS_FOTO=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
-Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Per recept: ${SCHEMA_VELD}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+${SCHEMA_UITLEG}
 REGELS — verplicht:
 1. Lees de afbeelding zorgvuldig van boven naar beneden. Let op meerdere kolommen: lees kolom voor kolom, niet rij voor rij.
 2. Neem ingrediënten en stappen LETTERLIJK over. Geen parafrasering, geen samenvoegen.
 3. Hoeveelheden: als een getal en een eenheid naast een ingredient staan (ook in een aparte kolom), koppel ze correct. Zet hoeveelheid als getal, eenheid als string.
 4. Vage hoeveelheden ("handjevol", "naar smaak", "scheut", "snuf"): zet volledige omschrijving in naam, hoeveelheid=1, eenheid="x".
 5. Onleesbare tekst: schrijf "[ONLEESBAAR]" letterlijk in het veld. Gok nooit.
-6. VERIFICATIE voor je de JSON afrondt: is elk ingrediënt aantoonbaar zichtbaar in de afbeelding? Is de volgorde van de stappen correct? Verwijder alles wat je niet zeker weet.
+6. tijdBereiding en tijdWacht invullen als zichtbaar in de afbeelding, anders 0.
+7. VERIFICATIE voor je de JSON afrondt: is elk ingrediënt aantoonbaar zichtbaar in de afbeelding? Is de volgorde van de stappen correct? Verwijder alles wat je niet zeker weet.
 Datum: gebruik DATUM.`;
 
 // ── Goedgekeurde receptsites ──────────────────────────────────────────────────
@@ -712,7 +720,22 @@ function normaliseer(parsed,fallbackBron){
     id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),
     tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',
     afbeelding:r.afbeelding||'',bron:r.bron||fallbackBron||'',
+    tijdBereiding:parseInt(r.tijdBereiding)||0,
+    tijdWacht:parseInt(r.tijdWacht)||0,
   }));
+}
+function fmtMin(m){
+  if(!m||m<=0)return'';
+  if(m<60)return m+'min';
+  const u=Math.floor(m/60),rest=m%60;
+  return rest?`${u}u${rest}`:`${u}u`;
+}
+function tijdSticker(r){
+  const b=parseInt(r.tijdBereiding)||0;
+  const w=parseInt(r.tijdWacht)||0;
+  if(!b&&!w)return'';
+  if(b&&w)return`⏱ ${fmtMin(b)}+${fmtMin(w)}`;
+  return`⏱ ${fmtMin(b||w)}`;
 }
 
 function bouwZoekQuery(basis){
@@ -1089,7 +1112,8 @@ function buildCard(r,opts={}){
     ${sel?'<div class="sel-badge">✓</div>':''}
     <div class="rcard-img">${r.afbeelding
       ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:${r.afbeelding.startsWith('blob:')?'contain':'cover'};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
-      :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}</div>
+      :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
+      ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}</div>
     <div class="rcard-body">
       ${buildLabels(r)}
       <div class="rcard-title">${h(r.titel)}</div>
