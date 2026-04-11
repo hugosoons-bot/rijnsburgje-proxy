@@ -769,16 +769,13 @@ function bouwZoekQuery(basis){
   const delen=[basis];
   if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
   if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
-  // Tijdfilter: stuur alleen "snel" mee voor ≤30 min — sites begrijpen geen "30 minuten" als zoekwoord
   if(S.zoekTijd==='30')delen.push('snel');
-  return encodeURIComponent(delen.filter(Boolean).join(' '));
+  // Geen basis en geen filters: gebruik generieke term zodat sites altijd iets teruggeven
+  const query=delen.filter(Boolean).join(' ')||'recept';
+  return encodeURIComponent(query);
 }
 
 async function verzamelLinks(q, termOorspronkelijk='', maxSites=RECEPTSITES.length){
-  // Zoekwoorden voor relevantie-filter op de linkttitel
-  const keywords=termOorspronkelijk.toLowerCase().split(/\s+/).filter(w=>w.length>3);
-
-  // Alle sites tegelijk parallel bevragen — veel sneller dan batches
   const res=await Promise.allSettled(
     RECEPTSITES.slice(0,maxSites).map(async site=>{
       try{
@@ -786,12 +783,7 @@ async function verzamelLinks(q, termOorspronkelijk='', maxSites=RECEPTSITES.leng
         const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
         if(!r.ok)return[];
         const d=await r.json();
-        let links=(d.links||[]).slice(0,3).map(l=>({...l,site:site.naam}));
-        // Filter: titel moet minstens 1 zoekwoord bevatten (voorkomt irrelevante resultaten)
-        if(keywords.length>0){
-          links=links.filter(l=>keywords.some(k=>l.titel.toLowerCase().includes(k)));
-        }
-        return links;
+        return (d.links||[]).slice(0,3).map(l=>({...l,site:site.naam}));
       }catch{return[];}
     })
   );
@@ -841,7 +833,6 @@ async function autoImportTopLinks(links,max=3){
 async function zoekTerm(){
   bewaarZoekVelden();
   const ingr=S.zoekIngr.trim();
-  if(!ingr){S.fout='Vul in waar je zin in hebt';rIP();return;}
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
     const q=bouwZoekQuery(ingr);
@@ -1234,8 +1225,8 @@ function renderZoeken(){
       ${S.zoekModus==='zoek'?`
         <div style="margin-bottom:12px">
           <span class="sec-label">Waar heb je zin in?</span>
-          <input id="z-ingr" class="inp" placeholder="bijv. snelle hap met kip, lasagne, veel groenten..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
-          <p class="search-hint">Je kunt een ingrediënt, gerecht of een omschrijving intypen.</p>
+          <input id="z-ingr" class="inp" placeholder="bijv. kip, lasagne, veel groenten... (optioneel)" value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
+          <p class="search-hint">Laat leeg om te zoeken op basis van de filters hieronder.</p>
         </div>`:`
         <p style="font-size:13px;color:var(--text2);margin-bottom:16px">De app zoekt 2 recepten voor je op echte websites, passend bij je filters.</p>`}
       <div style="margin-bottom:12px">
