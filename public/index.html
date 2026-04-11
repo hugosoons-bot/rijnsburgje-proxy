@@ -142,6 +142,9 @@ textarea.inp{resize:vertical}
 .empty{text-align:center;padding:50px 20px;color:var(--text3);font-size:14px}
 .empty span{font-size:36px;display:block;margin-bottom:10px}
 .hint{text-align:center;padding:30px 20px;color:var(--text3);font-size:13px;font-style:italic}
+@keyframes spin{to{transform:rotate(360deg)}}
+.laad-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;color:var(--text3);font-size:13px}
+.laad-cirkel{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite}
 .sec-label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:7px}
 
 /* ── Vrienden ── */
@@ -683,26 +686,28 @@ function bouwZoekQuery(basis){
   return encodeURIComponent(delen.filter(Boolean).join(' '));
 }
 
-async function verzamelLinks(q){
-  // Zoek in batches van 5 sites, geef links terug zodra ze binnenkomen
-  const BATCH=5;
-  let links=[];
-  for(let i=0;i<RECEPTSITES.length;i+=BATCH){
-    const batch=RECEPTSITES.slice(i,i+BATCH);
-    const resultaten=await Promise.all(batch.map(async site=>{
+async function verzamelLinks(q, termOorspronkelijk='', maxSites=RECEPTSITES.length){
+  // Zoekwoorden voor relevantie-filter op de linkttitel
+  const keywords=termOorspronkelijk.toLowerCase().split(/\s+/).filter(w=>w.length>3);
+
+  // Alle sites tegelijk parallel bevragen — veel sneller dan batches
+  const res=await Promise.allSettled(
+    RECEPTSITES.slice(0,maxSites).map(async site=>{
       try{
         const url=site.zoek.replace('{q}',q);
         const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
         if(!r.ok)return[];
         const d=await r.json();
-        return(d.links||[]).slice(0,2).map(l=>({...l,site:site.naam}));
+        let links=(d.links||[]).slice(0,3).map(l=>({...l,site:site.naam}));
+        // Filter: titel moet minstens 1 zoekwoord bevatten (voorkomt irrelevante resultaten)
+        if(keywords.length>0){
+          links=links.filter(l=>keywords.some(k=>l.titel.toLowerCase().includes(k)));
+        }
+        return links;
       }catch{return[];}
-    }));
-    links=[...links,...resultaten.flat()];
-    // Stop zodra we genoeg kandidaten hebben
-    if(links.length>=12)break;
-  }
-  return links;
+    })
+  );
+  return res.filter(r=>r.status==='fulfilled').flatMap(r=>r.value).slice(0,15);
 }
 
 async function importeerAlsRecept(url){
@@ -752,11 +757,11 @@ async function zoekTerm(){
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
     const q=bouwZoekQuery(ingr);
-    const links=await verzamelLinks(q);
+    const links=await verzamelLinks(q,ingr);
     S.zoekLinks=links;
     if(!links.length){S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';return;}
     await autoImportTopLinks(links,3);
-    if(!S.resultaten.length)S.fout='Recepten konden niet worden geladen. Probeer opnieuw.';
+    if(!S.resultaten.length)S.fout='Sites gevonden maar recepten konden niet worden geladen. Probeer opnieuw.';
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
 }
@@ -764,23 +769,31 @@ async function zoekTerm(){
 async function verasMe(){
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
-    // Claude bedenkt 2 zoektermen passend bij de filters
+    // Stap 1: Claude bedenkt 2 concrete receptnamen passend bij de filters
     const filterOmschrijving=[
       S.zoekDieet!=='alles'?`dieet: ${S.zoekDieet}`:'',
       S.zoekKeuken!=='Alle'?`keuken: ${S.zoekKeuken}`:'',
       S.zoekTijd?`max bereidingstijd: ${S.zoekTijd} minuten`:'',
     ].filter(Boolean).join(', ')||'geen specifieke filters';
-    const sys='Geef ALLEEN een pure JSON array van strings. Geen tekst, geen backticks. Voorbeeld: ["courgette soep","snelle pasta"]';
-    const zoektermen=await callAPI([{role:'user',content:`Stel 2 verschillende lekkere zoektermen voor om op te zoeken op een receptsite. Filters: ${filterOmschrijving}. Geef korte, concrete zoektermen (bijv. "kip tikka masala", "vegetarische pasta"). JSON array van 2 strings.`}],false,200,sys);
-    if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Geen suggesties ontvangen');
+    const sys='Jij geeft ALLEEN een JSON array van 2 strings terug. Geen uitleg, geen backticks. Voorbeeld: ["spaghetti carbonara","linzensoep"]';
+    const zoektermen=await callAPI(
+      [{role:'user',content:`Noem 2 verschillende lekkere gerechten die je kunt opzoeken op een receptsite. Filters: ${filterOmschrijving}. Geef precieze gerechtnamen, kort en concreet. JSON array van 2 strings.`}],
+      false,150,sys
+    );
+    if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Kon geen suggesties bedenken');
 
-    // Zoek voor elke term op de sites en importeer het beste resultaat
-    for(const term of zoektermen.slice(0,2)){
-      const q=bouwZoekQuery(term);
-      const links=await verzamelLinks(q);
-      if(links.length)await autoImportTopLinks(links,1);
-    }
-    if(!S.resultaten.length)S.fout='Geen recepten gevonden. Probeer opnieuw.';
+    // Stap 2: Zoek beide termen parallel op de sites
+    const [links1,links2]=await Promise.all(
+      zoektermen.slice(0,2).map(term=>verzamelLinks(bouwZoekQuery(term),term))
+    );
+
+    // Stap 3: Importeer 1 recept per term
+    await Promise.all([
+      links1.length?autoImportTopLinks(links1,1):Promise.resolve(),
+      links2.length?autoImportTopLinks(links2,1):Promise.resolve(),
+    ]);
+
+    if(!S.resultaten.length)S.fout='Geen recepten gevonden op de sites. Probeer opnieuw of pas filters aan.';
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
 }
@@ -1149,8 +1162,9 @@ function renderZoeken(){
       ${paneel}
     </div>
     ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)}</div>`:''}
+    ${busy&&!S.resultaten.length?`<div class="laad-wrap"><div class="laad-cirkel"></div><span>Recepten zoeken op websites...</span></div>`:''}
     ${S.resultaten.length>0
-      ?`${busy?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">Bezig met laden... (${S.resultaten.length} gevonden)</p>`:`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden van echte receptsites</p>`}<div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
+      ?`${busy?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">Nog bezig... (${S.resultaten.length} gevonden)</p>`:`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden van echte receptsites</p>`}<div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
       :(!busy&&S.ontdekTab!=='zoeken'?'<div class="hint">Plak een URL of upload een foto om een recept te importeren.</div>':'')}`;
 }
 
