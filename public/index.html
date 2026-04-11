@@ -1165,7 +1165,10 @@ function renderAuth(){
       <span class="sec-label">E-mailadres</span>
       <input id="${S.authTab==='login'?'log':'reg'}-email" class="inp" style="margin-bottom:12px" type="email" placeholder="jouw@email.nl" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
       <span class="sec-label">Wachtwoord</span>
-      <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:20px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+      <div style="position:relative;margin-bottom:20px">
+        <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;display:flex;align-items:center;justify-content:center" title="Wachtwoord tonen/verbergen">👁</button>
+      </div>
       ${S.authFout?`<div class="box-err" style="margin-bottom:16px">⚠️ ${h(S.authFout)}</div>`:''}
       <button class="btn btn-accent btn-w" onclick="${S.authTab==='login'?'login()':'registreer()'}" ${S.authLaden?'disabled':''}>
         ${S.authLaden?'Even wachten...':(S.authTab==='login'?'Inloggen →':'Account aanmaken →')}
@@ -1174,6 +1177,12 @@ function renderAuth(){
   </div>`;
 }
 
+function toggleWW(btn){
+  const inp=btn.previousElementSibling;
+  const toon=inp.type==='password';
+  inp.type=toon?'text':'password';
+  btn.textContent=toon?'🙈':'👁';
+}
 async function registreer(){
   const naam=document.getElementById('reg-naam')?.value?.trim();
   const email=document.getElementById('reg-email')?.value?.trim();
