@@ -301,7 +301,7 @@ let S={
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',urlFoutGeblokkeerd:false,
-  handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
+  handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',handmatigeAfbeelding:'',handmatigeAfbeeldingType:'image/jpeg',
   actieveWeek:null,
   zoekIngr:'',zoekLinks:[],zoekModus:'zoek',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
@@ -976,15 +976,40 @@ async function zoekUrl(){
   finally{S.laden=false;render();}
 }
 
+async function laadHandmatigeAfbeelding(input){
+  const file=input.files[0];if(!file)return;
+  const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  S.handmatigeAfbeelding=base64;S.handmatigeAfbeeldingType=file.type||'image/jpeg';rIP();
+}
+function pasteAfbeelding(e){
+  const items=e.clipboardData?.items;if(!items)return;
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      e.preventDefault();
+      const file=item.getAsFile();if(!file)return;
+      const reader=new FileReader();
+      reader.onload=ev=>{S.handmatigeAfbeelding=ev.target.result.split(',')[1];S.handmatigeAfbeeldingType=file.type||'image/jpeg';rIP();};
+      reader.readAsDataURL(file);return;
+    }
+  }
+}
 async function verwerkTekst(){
   const tekst=S.handmatigeTekst.trim();
-  if(tekst.length<30){S.fout='Plak een recept of typ wat meer tekst';rIP();return;}
+  const heeftFoto=!!S.handmatigeAfbeelding;
+  if(!heeftFoto&&tekst.length<30){S.fout='Plak een recept of typ wat meer tekst';rIP();return;}
   S.laden=true;S.fout='';S.resultaten=[];render();
   try{
     const titelHint=S.handmatigeTitel.trim()?`De titel is: "${S.handmatigeTitel.trim()}". `:'';
-    const bronHint=S.handmatigeUrl.trim()?`\n\nBron URL: ${S.handmatigeUrl.trim()}`:'';
-    const parsed=await callAPI([{role:'user',content:`${titelHint}Haal het recept uit deze tekst.${bronHint}\n\n${tekst.slice(0,8000)}`}],false,2000,SYS_URL);
-    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden in de tekst');
+    const bronHint=S.handmatigeUrl.trim()?`\nBron URL: ${S.handmatigeUrl.trim()}`:'';
+    let content;
+    if(heeftFoto){
+      content=[{type:'image',source:{type:'base64',media_type:S.handmatigeAfbeeldingType,data:S.handmatigeAfbeelding}}];
+      content.push({type:'text',text:tekst?`${titelHint}Gebruik de afbeelding en de onderstaande tekst om het recept te reconstrueren.${bronHint}\n\n${tekst.slice(0,8000)}`:`${titelHint}Haal het recept uit de afbeelding.${bronHint}`});
+    }else{
+      content=`${titelHint}Haal het recept uit deze tekst.${bronHint}\n\n${tekst.slice(0,8000)}`;
+    }
+    const parsed=await callAPI([{role:'user',content}],false,2000,heeftFoto?SYS_FOTO:SYS_URL);
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,S.handmatigeUrl.trim()||'');
     if(S.handmatigeTitel.trim()&&S.resultaten[0]&&!S.resultaten[0].titel)S.resultaten[0].titel=S.handmatigeTitel.trim();
   }catch(e){S.fout=e.message;}
@@ -1319,9 +1344,19 @@ function renderZoeken(){
     paneel=`
       <span class="sec-label">Titel (optioneel)</span>
       <input id="hm-titel" class="inp" placeholder="bijv. Pasta Carbonara" value="${h(S.handmatigeTitel)}" oninput="S.handmatigeTitel=this.value" style="margin-bottom:10px">
-      <span class="sec-label">Recepttekst</span>
-      <textarea id="hm-tekst" class="inp" rows="10" placeholder="Plak hier de recepttekst, ingrediëntenlijst, bereidingsstappen..." style="resize:vertical;font-size:13px;line-height:1.5" oninput="S.handmatigeTekst=this.value">${h(S.handmatigeTekst)}</textarea>
-      <span class="sec-label" style="margin-top:10px;display:block">Bronlink (optioneel)</span>
+      <span class="sec-label">Recepttekst (optioneel als je een foto toevoegt)</span>
+      <textarea id="hm-tekst" class="inp" rows="8" placeholder="Plak hier de recepttekst, ingrediëntenlijst, bereidingsstappen..." style="resize:vertical;font-size:13px;line-height:1.5" oninput="S.handmatigeTekst=this.value" onpaste="pasteAfbeelding(event)">${h(S.handmatigeTekst)}</textarea>
+      <span class="sec-label" style="margin-top:10px;display:block">Foto toevoegen (optioneel)</span>
+      ${S.handmatigeAfbeelding
+        ?`<div style="position:relative;display:inline-block;margin-bottom:12px">
+            <img src="data:${S.handmatigeAfbeeldingType};base64,${S.handmatigeAfbeelding}" style="max-height:130px;max-width:100%;border-radius:8px;border:1px solid var(--border);display:block">
+            <button onclick="S.handmatigeAfbeelding='';S.handmatigeAfbeeldingType='image/jpeg';rIP()" style="position:absolute;top:-8px;right:-8px;background:var(--text);color:white;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+          </div>`
+        :`<label for="hm-foto-inp" style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px dashed var(--border2);border-radius:var(--radius);padding:10px 14px;cursor:pointer;margin-bottom:12px;font-size:13px;color:var(--text2)">
+            📎 Foto toevoegen of plakken (Ctrl+V)
+          </label>
+          <input id="hm-foto-inp" type="file" accept="image/*" style="display:none" onchange="laadHandmatigeAfbeelding(this)">`}
+      <span class="sec-label">Bronlink (optioneel)</span>
       <input id="hm-url" class="inp" placeholder="https://..." value="${h(S.handmatigeUrl)}" oninput="S.handmatigeUrl=this.value" style="margin-bottom:12px">
       <button class="btn btn-accent btn-w" onclick="verwerkTekst()" ${busy?'disabled':''}>${busy?'Bezig...':'Recept verwerken →'}</button>`;
   }
