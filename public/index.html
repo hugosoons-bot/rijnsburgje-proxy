@@ -260,6 +260,7 @@ let S={
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',
+  zoekIngr:'',zoekTermVal:'',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
   editId:null,mK:'',mC:'',mTags:[],
@@ -626,8 +627,9 @@ function normaliseer(parsed,fallbackBron){
 }
 
 async function zoekTerm(){
-  const ingr=document.getElementById('z-ingr')?.value?.trim()||'';
-  const term=document.getElementById('z-term')?.value?.trim()||'';
+  bewaarZoekVelden();
+  const ingr=S.zoekIngr.trim();
+  const term=S.zoekTermVal.trim();
   let prompt='Zoek 3 recepten';
   if(S.zoekDieet!=='alles')prompt+=` die ${S.zoekDieet} zijn`;
   if(S.zoekKeuken!=='Alle')prompt+=` uit de ${S.zoekKeuken} keuken`;
@@ -935,11 +937,11 @@ function renderZoeken(){
     paneel=`
       <div style="margin-bottom:12px">
         <span class="sec-label">Ingrediënt</span>
-        <input id="z-ingr" class="inp" placeholder="bijv. courgette, kip, linzen..." onkeydown="if(event.key==='Enter')zoekTerm()">
+        <input id="z-ingr" class="inp" placeholder="bijv. courgette, kip, linzen..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
       </div>
       <div style="margin-bottom:12px">
         <span class="sec-label">Zoekterm (optioneel)</span>
-        <input id="z-term" class="inp" placeholder="bijv. lasagne of snelle pasta" onkeydown="if(event.key==='Enter')zoekTerm()">
+        <input id="z-term" class="inp" placeholder="bijv. lasagne of snelle pasta" value="${h(S.zoekTermVal)}" onkeydown="if(event.key==='Enter')zoekTerm()">
       </div>
       <div style="margin-bottom:12px">
         <span class="sec-label">Bereidingstijd</span>
@@ -1257,7 +1259,13 @@ function render(){
   else if(S.tab==='vrienden')html=renderVrienden();
   document.getElementById('content').innerHTML=html;
 }
-function rIP(){const y=window.scrollY;render();window.scrollTo(0,y);}
+function bewaarZoekVelden(){
+  const ingr=document.getElementById('z-ingr');
+  const term=document.getElementById('z-term');
+  if(ingr)S.zoekIngr=ingr.value;
+  if(term)S.zoekTermVal=term.value;
+}
+function rIP(){const y=window.scrollY;bewaarZoekVelden();render();window.scrollTo(0,y);}
 window.addEventListener('DOMContentLoaded',async()=>{
   const params=new URLSearchParams(window.location.search);
   if(params.get('volg'))pendingVolgId=params.get('volg');
