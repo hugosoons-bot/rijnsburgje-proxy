@@ -240,6 +240,17 @@ textarea.inp{resize:vertical}
       <input id="m-ti" class="inp" placeholder="Nieuwe tag..." onkeydown="if(event.key==='Enter')addMTag()" style="flex:1">
       <button class="btn btn-light" onclick="addMTag()">+ Tag</button>
     </div>
+    <span class="sec-label">Bereidingstijd</span>
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Actieve tijd (min)</div>
+        <input id="m-tb" class="inp" type="number" min="0" step="5" placeholder="bijv. 30">
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Wachttijd (min)</div>
+        <input id="m-tw" class="inp" type="number" min="0" step="5" placeholder="bijv. 60">
+      </div>
+    </div>
     <span class="sec-label">Notities</span>
     <textarea id="m-n" class="inp" style="min-height:70px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
     <button class="btn btn-dark btn-w" style="margin-top:14px" onclick="saveModal()">Opslaan</button>
@@ -610,6 +621,8 @@ function openEdit(id){
   S.editId=id;S.mK=r.keuken||'';S.mC=r.categorie||'';S.mTags=[...(r.tags||[])];
   document.getElementById('mtitle').textContent='✏️ '+r.titel;
   document.getElementById('m-n').value=r.notities||'';
+  document.getElementById('m-tb').value=r.tijdBereiding||'';
+  document.getElementById('m-tw').value=r.tijdWacht||'';
   document.getElementById('m-ti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC===c?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
@@ -621,7 +634,14 @@ function tMC(c){S.mC=S.mC===c?'':c;document.querySelectorAll('#m-c .cat-btn').fo
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
 function rmMT(i){S.mTags.splice(i,1);rMT();}
 function addMTag(){const inp=document.getElementById('m-ti'),t=inp.value.trim();if(t&&!S.mTags.includes(t)){S.mTags.push(t);rMT();}inp.value='';}
-async function saveModal(){const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.notities=document.getElementById('m-n').value;sluitModal();render();await savRecept(r);}
+async function saveModal(){
+  const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;
+  r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;
+  r.notities=document.getElementById('m-n').value;
+  r.tijdBereiding=parseInt(document.getElementById('m-tb').value)||0;
+  r.tijdWacht=parseInt(document.getElementById('m-tw').value)||0;
+  sluitModal();render();await savRecept(r);
+}
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;}
 function closeOvl(e){if(e.target===document.getElementById('mov'))sluitModal();}
 
