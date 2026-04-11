@@ -457,7 +457,7 @@ async function loadRecepten(){
   if(!S.gebruiker){S.recepten=DEMO;return;}
   const{data,error}=await DB.from('recipes').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
   if(error){console.error('Laden mislukt:',error.message);S.recepten=DEMO;return;}
-  S.recepten=data.length>0?data.map(fromSB):DEMO;
+  S.recepten=data.map(fromSB);
 }
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
@@ -1194,7 +1194,11 @@ function renderRecepten(){
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
       <button class="fb nnek${S.hideNNEK?' on':''}" onclick="S.hideNNEK=!S.hideNNEK;rIP()">🚫 Verberg "Niet nog een keer"</button>
     </div>
-    ${gef.length===0?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>':`<div class="cards-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
+    ${S.recepten.length===0
+      ?`<div class="empty"><span>👨‍🍳</span>Nog geen recepten opgeslagen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Ontdek recepten →</button></div>`
+      :gef.length===0
+        ?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>'
+        :`<div class="cards-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
 function renderZoeken(){
