@@ -609,7 +609,10 @@ async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
   const body={model:"claude-sonnet-4-20250514",max_tokens:maxTokens,system:sys,messages};
   if(search)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!resp.ok)throw new Error('API fout: '+resp.status);
+  if(!resp.ok){
+    if(resp.status===429)throw new Error('Te veel verzoeken — wacht even en probeer opnieuw');
+    throw new Error('API fout: '+resp.status);
+  }
   const data=await resp.json();
   if(data.error)throw new Error(data.error.message||'API fout');
   const txt=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -639,7 +642,7 @@ async function zoekTerm(){
   prompt+='. Geef echte werkende bronlinks. JSON array.';
   S.laden=true;S.fout='';S.resultaten=[];render();
   try{
-    const parsed=await callAPI([{role:'user',content:prompt}],true);
+    const parsed=await callAPI([{role:'user',content:prompt}],false);
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recepten gevonden');
     S.resultaten=normaliseer(parsed,'');
   }catch(e){S.fout=e.message;}
