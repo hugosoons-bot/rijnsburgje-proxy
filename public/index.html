@@ -783,7 +783,7 @@ async function zoekTerm(){
     const links=await verzamelLinks(q,ingr);
     S.zoekLinks=links;
     if(!links.length){S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';return;}
-    await autoImportTopLinks(links,3);
+    await autoImportTopLinks(links,5);
     if(!S.resultaten.length)S.fout='Sites gevonden maar recepten konden niet worden geladen. Probeer opnieuw.';
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
@@ -814,8 +814,8 @@ async function verasMe(){
 
     // Stap 3: Importeer 1 recept per term
     await Promise.all([
-      links1.length?autoImportTopLinks(links1,1):Promise.resolve(),
-      links2.length?autoImportTopLinks(links2,1):Promise.resolve(),
+      links1.length?autoImportTopLinks(links1,2):Promise.resolve(),
+      links2.length?autoImportTopLinks(links2,2):Promise.resolve(),
     ]);
 
     if(!S.resultaten.length)S.fout='Geen recepten gevonden op de sites. Probeer opnieuw of pas filters aan.';
