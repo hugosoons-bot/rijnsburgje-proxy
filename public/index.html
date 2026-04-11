@@ -47,6 +47,7 @@ a{color:var(--accent);text-decoration:none}
 .rcard-img-emoji{font-size:52px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.1))}
 .sel-badge{position:absolute;top:10px;right:10px;background:var(--accent);color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .tijd-sticker{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);color:#fff;font-size:11px;font-weight:600;padding:3px 7px;border-radius:20px;letter-spacing:.3px;pointer-events:none}
+.week-nav{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
 .rcard-body{padding:14px 16px 10px}
 .rcard-labels{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
 .lbl{border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600;letter-spacing:.03em;display:inline-flex;align-items:center;gap:3px}
@@ -301,6 +302,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
+  actieveWeek:null,
   zoekIngr:'',zoekLinks:[],zoekModus:'zoek',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
@@ -472,6 +474,7 @@ async function loadRecepten(){
 }
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
+  S.actieveWeek=getMaandag();
   await loadRecepten();
   await laadWeekmenu();
   await laadBoodschappen();
@@ -499,9 +502,39 @@ function formatMaandag(dateStr){
   const d=new Date(dateStr+'T00:00:00');
   return d.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
 }
+function weekLabel(maandag){
+  const nu=getMaandag();
+  const diff=Math.round((new Date(maandag+'T00:00:00')-new Date(nu+'T00:00:00'))/(7*24*3600*1000));
+  if(diff===0)return'Deze week';
+  if(diff===1)return'Volgende week';
+  if(diff===-1)return'Vorige week';
+  if(diff>1)return`Over ${diff} weken`;
+  return`${-diff} weken geleden`;
+}
+function formatWeekBereik(maandag){
+  const d=new Date(maandag+'T00:00:00');
+  const z=new Date(d);z.setDate(d.getDate()+6);
+  const fmt=dt=>dt.toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
+  return`${fmt(d)} – ${fmt(z)} ${z.getFullYear()}`;
+}
+function verschuifWeek(delta){
+  const d=new Date((S.actieveWeek||getMaandag())+'T00:00:00');
+  d.setDate(d.getDate()+delta*7);
+  wisselWeek(d.toISOString().split('T')[0]);
+}
+async function wisselWeek(nieuweWeek){
+  S.actieveWeek=nieuweWeek;
+  S.menuId=null;S.lijstId=null;
+  S.geselecteerd=[];S.weekPers={};
+  S.shopItems=[];S.extraItems=[];
+  sav();render();
+  await laadWeekmenu();
+  await laadBoodschappen();
+  render();
+}
 async function laadWeekmenu(){
   if(!S.gebruiker)return;
-  const{data:menu}=await DB.from('week_menus').select('id,is_public').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+  const{data:menu}=await DB.from('week_menus').select('id,is_public').eq('user_id',S.gebruiker.id).eq('week_start',S.actieveWeek).maybeSingle();
   if(!menu){S.menuId=null;S.weekMenuPubliek=false;S.geselecteerd=[];S.weekPers={};return;}
   S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
   const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
@@ -513,10 +546,10 @@ async function slaWeekmenuOp(){
   if(!S.gebruiker)return;
   let menuId=S.menuId;
   if(!menuId){
-    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',S.actieveWeek).maybeSingle();
     if(bestaand){menuId=bestaand.id;}
     else{
-      const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag(),is_public:S.weekMenuPubliek}).select('id').single();
+      const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:S.actieveWeek,is_public:S.weekMenuPubliek}).select('id').single();
       if(error){console.error('Weekmenu aanmaken mislukt:',error.message);return;}
       menuId=nieuw.id;
     }
@@ -542,10 +575,10 @@ async function toggleWeekMenuPubliek(){
     await DB.from('week_menus').update({is_public:S.weekMenuPubliek}).eq('id',S.menuId);
   } else if(S.weekMenuPubliek){
     // Geen recepten geselecteerd maar toch publiek willen? Maak leeg menu aan.
-    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',S.actieveWeek).maybeSingle();
     if(bestaand){S.menuId=bestaand.id;await DB.from('week_menus').update({is_public:true}).eq('id',bestaand.id);}
     else{
-      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag(),is_public:true}).select('id').single();
+      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:S.actieveWeek,is_public:true}).select('id').single();
       if(nieuw)S.menuId=nieuw.id;
     }
   }
@@ -1049,10 +1082,10 @@ async function ensureLijstId(){
   if(S.lijstId)return S.lijstId;
   if(!S.gebruiker)return null;
   if(!S.menuId){
-    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',getMaandag()).maybeSingle();
+    const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',S.actieveWeek).maybeSingle();
     if(bestaand)S.menuId=bestaand.id;
     else{
-      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:getMaandag()}).select('id').single();
+      const{data:nieuw}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:S.actieveWeek}).select('id').single();
       if(nieuw)S.menuId=nieuw.id;
     }
   }
@@ -1067,7 +1100,9 @@ async function bewaarVoorVolgendeWeek(){
   const items=S.extraItems.filter(i=>!i.done);
   if(!items.length){alert('Geen handmatige items om te bewaren.');return;}
   if(!S.gebruiker)return;
-  const vMaandag=getVolgendeWeek();
+  const aw=new Date((S.actieveWeek||getMaandag())+'T00:00:00');
+  aw.setDate(aw.getDate()+7);
+  const vMaandag=aw.toISOString().split('T')[0];
   let menuId;
   const{data:em}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',vMaandag).maybeSingle();
   if(em)menuId=em.id;
@@ -1314,8 +1349,16 @@ function renderZoeken(){
 
 function renderWeekmenu(){
   const sel=S.recepten.filter(r=>S.geselecteerd.includes(r.id));
+  const aw=S.actieveWeek||getMaandag();
   return`
-    <div style="font-size:13px;color:var(--text2);font-weight:500;margin-bottom:12px">De week van maandag ${formatMaandag(getMaandag())}</div>
+    <div class="week-nav">
+      <button class="btn btn-ghost" onclick="verschuifWeek(-1)" title="Vorige week">‹</button>
+      <div style="text-align:center;flex:1">
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${weekLabel(aw)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${formatWeekBereik(aw)}</div>
+      </div>
+      <button class="btn btn-ghost" onclick="verschuifWeek(1)" title="Volgende week">›</button>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;margin-bottom:12px;box-shadow:var(--shadow)">
       <span style="flex:1;font-size:13px;color:var(--text);font-weight:500">Weekmenu delen met volgers</span>
       <span style="font-size:11px;color:var(--text3)">${S.weekMenuPubliek?'Zichtbaar in feeds':'Alleen voor jou'}</span>
@@ -1338,8 +1381,16 @@ function renderBoodschappen(){
   // Groepeer actieve items per afdeling
   const groepen=AFDS.map(a=>({...a,items:S.shopItems.map((x,i)=>({...x,idx:i})).filter(x=>!x.done&&x.afd===a.n)})).filter(g=>g.items.length>0);
 
+  const aw=S.actieveWeek||getMaandag();
   return`
-    <div style="font-size:13px;color:var(--text2);font-weight:500;margin-bottom:8px">De week van maandag ${formatMaandag(getMaandag())}</div>
+    <div class="week-nav">
+      <button class="btn btn-ghost" onclick="verschuifWeek(-1)" title="Vorige week">‹</button>
+      <div style="text-align:center;flex:1">
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${weekLabel(aw)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${formatWeekBereik(aw)}</div>
+      </div>
+      <button class="btn btn-ghost" onclick="verschuifWeek(1)" title="Volgende week">›</button>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text)">Boodschappenlijst</h2>
       <span style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)">${done.length}/${S.shopItems.length} afgevinkt</span>
