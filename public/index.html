@@ -1227,7 +1227,7 @@ function renderZoeken(){
       <input id="inp-url" class="inp" placeholder="https://www.allerhande.nl/recept/..." value="${h(S.zoekUrl)}" onkeydown="if(event.key==='Enter')zoekUrl()">
       <p class="search-hint">Werkt met allerhande.nl, chickslovefood.com, lekkerensimpel.com en meer.</p>
       <button class="btn btn-accent btn-w" style="margin-top:12px" onclick="zoekUrl()" ${busy?'disabled':''}>${busy?'Ophalen...':'Recept ophalen →'}</button>`;
-  } else {
+  } else if(S.ontdekTab==='foto'){
     paneel=`
       <span class="sec-label">Upload een foto of screenshot van een recept</span>
       <label for="foto-inp" style="display:block;border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:32px 20px;text-align:center;cursor:${busy?'default':'pointer'};background:var(--surface2);margin:8px 0 12px">
