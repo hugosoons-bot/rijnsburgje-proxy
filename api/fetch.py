@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 from urllib.request import Request, urlopen, build_opener, HTTPCookieProcessor
 from urllib.error import URLError, HTTPError
+from http.client import RemoteDisconnected
 from http.cookiejar import CookieJar
 from html.parser import HTMLParser
 import gzip
@@ -388,6 +389,52 @@ def _html_fetch(opener, url: str, timeout: int = 12):
         return raw.decode("utf-8", errors="replace"), getattr(resp, "url", url)
 
 
+def _try_wp_api(url: str) -> dict | None:
+    """Fallback: haal recept op via WordPress REST API (werkt ook als HTML geblokkeerd is)."""
+    parsed = urlparse(url)
+    parts = [p for p in parsed.path.rstrip("/").split("/") if p]
+    if not parts:
+        return None
+    slug = parts[-1]
+    api_url = f"{parsed.scheme}://{parsed.netloc}/wp-json/wp/v2/posts?slug={slug}&_fields=title,content,yoast_head_json"
+    req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "application/json"})
+    try:
+        with urlopen(req, timeout=12) as resp:
+            if "json" not in resp.headers.get("Content-Type", ""):
+                return None
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+    if not data or not isinstance(data, list):
+        return None
+    post = data[0]
+    content_html = (post.get("content") or {}).get("rendered", "")
+    if not content_html:
+        return None
+
+    extractor = RecipeExtractor()
+    extractor.feed(content_html)
+    text = extractor.get_text()
+    if len(text) < 100:
+        return None
+
+    result = {"url": url, "text": text[:10000], "length": len(text)}
+
+    # Afbeelding: eerst og:image uit yoast_head_json, dan wat extractor vond
+    yoast = post.get("yoast_head_json") or {}
+    og_images = yoast.get("og_image") or []
+    if og_images and isinstance(og_images, list):
+        result["image"] = og_images[0].get("url", "")
+    elif extractor.image:
+        result["image"] = extractor.image
+
+    if extractor.schema_recipe:
+        result.update(extract_recipe_from_schema(extractor.schema_recipe, url))
+
+    return result
+
+
 def fetch_and_extract(url: str) -> dict:
     parsed_url = urlparse(url)
     homepage = f"{parsed_url.scheme}://{parsed_url.netloc}/"
@@ -398,9 +445,20 @@ def fetch_and_extract(url: str) -> dict:
 
     try:
         html, final_url = _html_fetch(opener, url)
+    except (RemoteDisconnected, ConnectionResetError):
+        # Server sloot verbinding zonder antwoord — probeer WordPress REST API
+        wp = _try_wp_api(url)
+        if wp:
+            return wp
+        return {"error": "De server sloot de verbinding. Mogelijk blokkeert deze site geautomatiseerde verzoeken."}
     except HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.reason}"}
     except URLError as e:
+        # URLError kan ook een RemoteDisconnected inpakken
+        if isinstance(e.reason, (RemoteDisconnected, ConnectionResetError)):
+            wp = _try_wp_api(url)
+            if wp:
+                return wp
         return {"error": f"Kon pagina niet bereiken: {e.reason}"}
     except ValueError as e:
         return {"error": str(e)}
