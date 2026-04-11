@@ -404,24 +404,19 @@ def _try_wp_api(url: str) -> dict | None:
         f"{parsed.scheme}://{domain}/wp-json/wp/v2/posts?slug={slug}&_fields=title,content,yoast_head_json",
     ]
     data = None
-    wp_errors = []
     for api_url in candidates:
         req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "application/json"})
         try:
             with urlopen(req, timeout=10) as resp:
-                ct = resp.headers.get("Content-Type", "")
-                if "json" not in ct:
-                    wp_errors.append(f"no-json({ct[:40]})")
+                if "json" not in resp.headers.get("Content-Type", ""):
                     continue
                 data = json.loads(resp.read().decode("utf-8"))
                 if data and isinstance(data, list):
                     break
-                wp_errors.append(f"leeg({type(data).__name__})")
-        except Exception as e:
-            wp_errors.append(f"{type(e).__name__}:{str(e)[:60]}")
+        except Exception:
             continue
     if not data or not isinstance(data, list):
-        return {"_wp_debug": "; ".join(wp_errors) or "geen data"}
+        return None
     post = data[0]
     content_html = (post.get("content") or {}).get("rendered", "")
     if not content_html:
@@ -449,6 +444,60 @@ def _try_wp_api(url: str) -> dict | None:
     return result
 
 
+def _try_wayback(url: str) -> dict | None:
+    """Haal pagina op via Wayback Machine (web.archive.org) als directe fetch geblokkeerd is."""
+    api_url = f"https://archive.org/wayback/available?url={url}"
+    req = Request(api_url, headers={"User-Agent": BROWSER_HEADERS["User-Agent"]})
+    try:
+        with urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        snapshot_url = data.get("archived_snapshots", {}).get("closest", {}).get("url")
+        if not snapshot_url:
+            return None
+        # Zet http naar https en verander naar if_ variant (geeft originele HTML zonder Wayback toolbar)
+        snapshot_url = snapshot_url.replace("http://web.archive.org", "https://web.archive.org")
+        snapshot_url = snapshot_url.replace("/web/", "/web/if_/", 1) if "/if_/" not in snapshot_url else snapshot_url
+    except Exception:
+        return None
+
+    jar = CookieJar()
+    opener = build_opener(HTTPCookieProcessor(jar))
+    try:
+        html, _ = _html_fetch(opener, snapshot_url, timeout=12)
+    except Exception:
+        return None
+
+    extractor = RecipeExtractor()
+    extractor.feed(html)
+    text = extractor.get_text()
+    if len(text) < 100:
+        return None
+
+    result = {"url": url, "text": text[:10000], "length": len(text)}
+    if extractor.image:
+        result["image"] = extractor.image
+    if extractor.schema_recipe:
+        result.update(extract_recipe_from_schema(extractor.schema_recipe, url))
+    return result
+
+
+def _connection_blocked_fallback(url: str) -> dict:
+    """Probeer WP API dan Wayback Machine als directe fetch geblokkeerd is."""
+    wp = _try_wp_api(url)
+    if wp:
+        return wp
+    wb = _try_wayback(url)
+    if wb:
+        return wb
+    return {
+        "error": (
+            "Deze site blokkeert verzoeken van onze server. "
+            "Probeer het recept via een andere site te vinden, "
+            "of open het in je browser en kopieer de tekst handmatig."
+        )
+    }
+
+
 def fetch_and_extract(url: str) -> dict:
     parsed_url = urlparse(url)
     homepage = f"{parsed_url.scheme}://{parsed_url.netloc}/"
@@ -459,26 +508,18 @@ def fetch_and_extract(url: str) -> dict:
 
     try:
         html, final_url = _html_fetch(opener, url)
-    except (RemoteDisconnected, ConnectionResetError) as e:
-        wp = _try_wp_api(url)
-        if wp and "_wp_debug" not in wp:
-            return wp
-        debug = (wp or {}).get("_wp_debug", "")
-        return {"error": f"[RemoteDisconnected] {e} | wp-api: {debug}"}
+    except (RemoteDisconnected, ConnectionResetError):
+        return _connection_blocked_fallback(url)
     except HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.reason}"}
     except URLError as e:
         if isinstance(e.reason, (RemoteDisconnected, ConnectionResetError)):
-            wp = _try_wp_api(url)
-            if wp and "_wp_debug" not in wp:
-                return wp
-            debug = (wp or {}).get("_wp_debug", "")
-            return {"error": f"[URLError/RemoteDisconnected] {e.reason} | wp-api: {debug}"}
-        return {"error": f"[URLError] {e.reason}"}
+            return _connection_blocked_fallback(url)
+        return {"error": f"Kon pagina niet bereiken: {e.reason}"}
     except ValueError as e:
         return {"error": str(e)}
     except Exception as e:
-        return {"error": f"[{type(e).__name__}] {e}"}
+        return {"error": str(e)}
 
     # Check of we op een auth/loginpagina zijn beland
     ext1 = RecipeExtractor()
