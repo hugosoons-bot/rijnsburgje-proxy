@@ -7,8 +7,9 @@ Extraheert ook JSON-LD (schema.org/Recipe) als die aanwezig is.
 
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, HTTPCookieProcessor
 from urllib.error import URLError, HTTPError
+from http.cookiejar import CookieJar
 from html.parser import HTMLParser
 import json
 
@@ -341,69 +342,94 @@ def fetch_links(url: str) -> dict:
     return {"links": results}
 
 
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Connection": "keep-alive",
+}
+
+OAUTH_HOSTS = ("token.roularta.nl", "login.roularta.nl", "accounts.google.com",
+               "login.microsoftonline.com", "auth0.com", "okta.com", "sso.roularta.nl")
+AUTH_PATHS = ("/oauth/", "/authorize", "/login/callback", "/sso/")
+LOGIN_TITELS = ("inloggen", "login", "sign in", "aanmelden",
+                "subscriber only", "access denied", "toegang geweigerd")
+
+
+def _is_auth_page(final_url: str, title: str) -> bool:
+    host = urlparse(final_url).netloc.lower()
+    lower = final_url.lower()
+    if any(d in host for d in OAUTH_HOSTS):
+        return True
+    if any(p in lower for p in AUTH_PATHS):
+        return True
+    if title and any(s in title.lower() for s in LOGIN_TITELS):
+        return True
+    return False
+
+
+def _html_fetch(opener, url: str, timeout: int = 12):
+    """Haal HTML op met een opener (met cookie-jar). Geef (html, final_url) terug."""
+    req = Request(url, headers=BROWSER_HEADERS)
+    with opener.open(req, timeout=timeout) as resp:
+        content_type = resp.headers.get("Content-Type", "")
+        if "html" not in content_type:
+            raise ValueError(f"Geen HTML pagina ({content_type})")
+        return resp.read().decode("utf-8", errors="replace"), getattr(resp, "url", url)
+
+
 def fetch_and_extract(url: str) -> dict:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-    }
+    parsed_url = urlparse(url)
+    homepage = f"{parsed_url.scheme}://{parsed_url.netloc}/"
 
-    req = Request(url, headers=headers)
+    # Poging 1: directe fetch met verse cookie-jar
+    jar = CookieJar()
+    opener = build_opener(HTTPCookieProcessor(jar))
 
-    final_url = url
     try:
-        with urlopen(req, timeout=12) as resp:
-            content_type = resp.headers.get("Content-Type", "")
-            if "html" not in content_type:
-                return {"error": f"Geen HTML pagina ({content_type})"}
-            final_url = getattr(resp, "url", url)
-            html = resp.read().decode("utf-8", errors="replace")
-
+        html, final_url = _html_fetch(opener, url)
     except HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.reason}"}
     except URLError as e:
         return {"error": f"Kon pagina niet bereiken: {e.reason}"}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
-    # Detecteer OAuth/SSO-redirects aan de hand van de eindURL (betrouwbaarder dan paginatitel)
-    OAUTH_DOMEINEN = ("token.roularta.nl", "login.roularta.nl", "accounts.google.com",
-                      "login.microsoftonline.com", "auth0.com", "okta.com")
-    AUTH_PADEN = ("/oauth/", "/authorize", "/login/callback", "/signin", "/sso/")
-    final_lower = final_url.lower()
-    from urllib.parse import urlparse as _up
-    final_host = _up(final_url).netloc.lower()
+    # Check of we op een auth/loginpagina zijn beland
+    ext1 = RecipeExtractor()
+    ext1.feed(html)
+    if _is_auth_page(final_url, ext1.page_title.strip()):
+        # Poging 2: haal eerst de homepage op om guest-cookies te krijgen, daarna retry
+        jar2 = CookieJar()
+        opener2 = build_opener(HTTPCookieProcessor(jar2))
+        try:
+            _html_fetch(opener2, homepage, timeout=8)   # cookies ophalen
+            html, final_url = _html_fetch(opener2, url)
+        except Exception:
+            pass  # val door naar foutmelding hieronder
 
-    if any(d in final_host for d in OAUTH_DOMEINEN) or \
-       any(p in final_lower for p in AUTH_PADEN):
-        return {
-            "error": (
-                "Deze site vereist inloggen om recepten te bekijken. "
-                "Open de URL in je browser terwijl je bent ingelogd en kopieer "
-                "de tekst handmatig, of zoek hetzelfde recept op een andere site."
-            )
-        }
+        ext2 = RecipeExtractor()
+        ext2.feed(html)
+        if _is_auth_page(final_url, ext2.page_title.strip()):
+            return {
+                "error": (
+                    "Deze site vereist inloggen om recepten te bekijken. "
+                    "Zoek hetzelfde recept op een andere site, of open het "
+                    "in je browser terwijl je bent ingelogd."
+                )
+            }
+        # Gelukt na homepage-voorbezoek — gebruik nieuwe extractor
+        extractor = ext2
+    else:
+        extractor = ext1
 
-    extractor = RecipeExtractor()
-    extractor.feed(html)
     text = extractor.get_text()
-    title = extractor.page_title.strip()
-
-    # Detecteer ook expliciete loginpagina's via de paginatitel
-    LOGIN_TITELS = ("inloggen", "login", "sign in", "aanmelden", "log in",
-                    "subscriber only", "access denied", "toegang geweigerd")
-    if title and any(s in title.lower() for s in LOGIN_TITELS):
-        return {
-            "error": (
-                "Deze site vereist inloggen om recepten te bekijken. "
-                "Open de URL in je browser terwijl je bent ingelogd, of "
-                "zoek hetzelfde recept op een andere site."
-            )
-        }
 
     if len(text) < 100:
         return {"error": "Pagina te kort of leeg — mogelijk een fout of leeg recept"}
