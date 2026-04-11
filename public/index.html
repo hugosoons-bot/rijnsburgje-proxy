@@ -287,7 +287,8 @@ let S={
   scherm:'laden',gebruiker:null,profiel:null,
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
-  ontdekTab:'zoeken',zoekUrl:'',
+  ontdekTab:'zoeken',zoekUrl:'',urlFoutGeblokkeerd:false,
+  handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
   zoekIngr:'',zoekLinks:[],zoekModus:'zoek',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
@@ -839,7 +840,7 @@ async function verasMe(){
 
 async function zoekUrl(){
   const q=document.getElementById('inp-url')?.value?.trim();if(!q)return;
-  S.zoekUrl=q;S.laden=true;S.fout='';S.resultaten=[];render();
+  S.zoekUrl=q;S.laden=true;S.fout='';S.urlFoutGeblokkeerd=false;S.resultaten=[];render();
   try{
     const pr=await fetch('/fetch?url='+encodeURIComponent(q));
     if(!pr.ok){const e=await pr.json().catch(()=>({}));throw new Error(e?.error||'Kon pagina niet ophalen');}
@@ -872,6 +873,24 @@ async function zoekUrl(){
     if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,q);
+  }catch(e){
+    S.fout=e.message;
+    S.urlFoutGeblokkeerd=e.message.includes('blokkeert')||e.message.includes('verbinding')||e.message.includes('inloggen')||e.message.includes('betaal');
+  }
+  finally{S.laden=false;render();}
+}
+
+async function verwerkTekst(){
+  const tekst=S.handmatigeTekst.trim();
+  if(tekst.length<30){S.fout='Plak een recept of typ wat meer tekst';rIP();return;}
+  S.laden=true;S.fout='';S.resultaten=[];render();
+  try{
+    const titelHint=S.handmatigeTitel.trim()?`De titel is: "${S.handmatigeTitel.trim()}". `:'';
+    const bronHint=S.handmatigeUrl.trim()?`\n\nBron URL: ${S.handmatigeUrl.trim()}`:'';
+    const parsed=await callAPI([{role:'user',content:`${titelHint}Haal het recept uit deze tekst.${bronHint}\n\n${tekst.slice(0,8000)}`}],false,2000,SYS_URL);
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden in de tekst');
+    S.resultaten=normaliseer(parsed,S.handmatigeUrl.trim()||'');
+    if(S.handmatigeTitel.trim()&&S.resultaten[0]&&!S.resultaten[0].titel)S.resultaten[0].titel=S.handmatigeTitel.trim();
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
 }
@@ -1134,6 +1153,7 @@ function renderZoeken(){
       <button class="mb${S.ontdekTab==='zoeken'?' on':''}" onclick="S.ontdekTab='zoeken';render()">🔍 Zoeken</button>
       <button class="mb${S.ontdekTab==='url'?' on':''}" onclick="S.ontdekTab='url';render()">🔗 URL</button>
       <button class="mb${S.ontdekTab==='foto'?' on':''}" onclick="S.ontdekTab='foto';render()">📷 Foto</button>
+      <button class="mb${S.ontdekTab==='tekst'?' on':''}" onclick="S.ontdekTab='tekst';render()">✏️ Tekst</button>
       <button class="mb${S.ontdekTab==='gemeenschap'?' on':''}" onclick="S.ontdekTab='gemeenschap';laadPubliekeRecepten()">👥 Gemeenschap</button>
     </div>`;
 
@@ -1191,8 +1211,25 @@ function renderZoeken(){
         <span style="font-size:13px;color:var(--text2)">${busy?'Bezig met verwerken...':'Klik om een foto te kiezen'}</span>
       </label>
       <input id="foto-inp" type="file" accept="image/*" style="display:none" onchange="verwerkFoto(this)" ${busy?'disabled':''}>
-      <p class="search-hint">Werkt met foto's van receptenboeken, schermafdrukken en uitgeprinte recepten.</p>`;
+      <p class="search-hint">Werkt met foto's van receptenboeken, screenshots van websites en uitgeprinte recepten.</p>`;
+  } else if(S.ontdekTab==='tekst'){
+    paneel=`
+      <span class="sec-label">Titel (optioneel)</span>
+      <input id="hm-titel" class="inp" placeholder="bijv. Pasta Carbonara" value="${h(S.handmatigeTitel)}" oninput="S.handmatigeTitel=this.value" style="margin-bottom:10px">
+      <span class="sec-label">Recepttekst</span>
+      <textarea id="hm-tekst" class="inp" rows="10" placeholder="Plak hier de recepttekst, ingrediëntenlijst, bereidingsstappen..." style="resize:vertical;font-size:13px;line-height:1.5" oninput="S.handmatigeTekst=this.value">${h(S.handmatigeTekst)}</textarea>
+      <span class="sec-label" style="margin-top:10px;display:block">Bronlink (optioneel)</span>
+      <input id="hm-url" class="inp" placeholder="https://..." value="${h(S.handmatigeUrl)}" oninput="S.handmatigeUrl=this.value" style="margin-bottom:12px">
+      <button class="btn btn-accent btn-w" onclick="verwerkTekst()" ${busy?'disabled':''}>${busy?'Bezig...':'Recept verwerken →'}</button>`;
   }
+
+  const foutBlok=S.fout?`
+    <div class="box-err">⚠️ ${h(S.fout)}
+      ${S.urlFoutGeblokkeerd?`<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn btn-accent" onclick="S.ontdekTab='foto';S.fout='';S.urlFoutGeblokkeerd=false;render()">📷 Screenshot uploaden</button>
+        <button class="btn btn-ghost" onclick="S.ontdekTab='tekst';S.fout='';S.urlFoutGeblokkeerd=false;render()">✏️ Tekst plakken</button>
+      </div>`:''}
+    </div>`:'';
 
   return`
     <div class="search-wrap">
@@ -1200,11 +1237,11 @@ function renderZoeken(){
       ${tabsBtns}
       ${paneel}
     </div>
-    ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)}</div>`:''}
+    ${foutBlok}
     ${busy&&!S.resultaten.length?`<div class="laad-wrap"><div class="laad-cirkel"></div><span>Recepten zoeken op websites...</span></div>`:''}
     ${S.resultaten.length>0
       ?`${busy?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">Nog bezig... (${S.resultaten.length} gevonden)</p>`:`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden van echte receptsites</p>`}<div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
-      :(!busy&&S.ontdekTab!=='zoeken'?'<div class="hint">Plak een URL of upload een foto om een recept te importeren.</div>':'')}`;
+      :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='foto'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL, upload een foto of plak tekst om een recept te importeren.</div>':'')}`;
 }
 
 function renderWeekmenu(){
