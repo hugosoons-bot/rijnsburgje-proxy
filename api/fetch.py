@@ -366,24 +366,36 @@ def fetch_links(url: str) -> dict:
     return {"links": results}
 
 
-# Bekende receptdomeinen — links buiten deze lijst worden genegeerd in DDG-resultaten
-RECEPT_DOMEINEN = {
+# Nederlandse receptsites — krijgen voorrang in zoekresultaten (op volgorde van voorkeur)
+NL_DOMEINEN = [
     "allerhande.nl", "leukerecepten.nl", "lekkerensimpel.nl",
     "chickslovefood.com", "15gram.nl", "smulweb.nl", "foodies.nl",
     "miljuschka.nl", "rudolphsbakery.nl", "24kitchen.nl", "culy.nl",
-    "bettyskitchen.nl", "dillekamille.nl", "seriouseats.com",
-    "cooking.nytimes.com", "budgetbytes.com", "themediterraneandish.com",
-    "ottolenghi.co.uk", "bonappetit.com", "minimalistbaker.com",
-    "halfbakedharvest.com", "pinchofyum.com", "ah.nl", "jamieoliver.com",
-    "deliciousmagazine.nl", "jumbo.com", "recepten.nl",
-}
+    "bettyskitchen.nl", "dillekamille.nl", "ah.nl", "deliciousmagazine.nl",
+    "jumbo.com", "recepten.nl",
+]
+
+# Internationale receptsites — als fallback als Nederlandse niets opleveren
+EN_DOMEINEN = [
+    "seriouseats.com", "cooking.nytimes.com", "budgetbytes.com",
+    "themediterraneandish.com", "ottolenghi.co.uk", "bonappetit.com",
+    "minimalistbaker.com", "halfbakedharvest.com", "pinchofyum.com",
+    "jamieoliver.com",
+]
+
+# Gecombineerde whitelist
+RECEPT_DOMEINEN = set(NL_DOMEINEN + EN_DOMEINEN)
+
+# Prioriteitsscore per domein: lager = hoger in de lijst
+_DOMEIN_PRIO = {d: i for i, d in enumerate(NL_DOMEINEN + EN_DOMEINEN)}
 
 
 def fetch_ddg_links(query: str) -> dict:
     """Zoek via DuckDuckGo HTML-endpoint en extraheer links van bekende receptsites."""
     # Voeg 'recept' toe zodat DDG meer receptpagina's teruggeeft
     zoekterm = query if "recept" in query.lower() else query + " recept"
-    ddg_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(zoekterm)
+    # kl=nl-nl geeft DuckDuckGo de hint om Nederlandse resultaten te prefereren
+    ddg_url = "https://html.duckduckgo.com/html/?kl=nl-nl&q=" + quote_plus(zoekterm)
 
     headers = {**BROWSER_HEADERS, "Referer": "https://duckduckgo.com/"}
     req = Request(ddg_url, headers=headers)
@@ -401,7 +413,6 @@ def fetch_ddg_links(query: str) -> dict:
         return {"error": str(e)}
 
     # DDG-redirect-links bevatten de echte URL als uddg= parameter
-    # Formaat: //duckduckgo.com/l/?uddg=https%3A%2F%2F...
     uddg_hits = re.findall(r'uddg=([^&">\s]+)', html)
     seen = set()
     results = []
@@ -411,15 +422,22 @@ def fetch_ddg_links(query: str) -> dict:
             continue
         parsed = urlparse(url)
         domain = parsed.netloc.lstrip("www.")
-        if not any(domain == d or domain.endswith("." + d) for d in RECEPT_DOMEINEN):
+        matched = next((d for d in RECEPT_DOMEINEN if domain == d or domain.endswith("." + d)), None)
+        if not matched:
             continue
         if url in seen:
             continue
         seen.add(url)
-        # Titel halen we uit de html via context (simpele benadering: domein als fallback)
-        results.append({"url": url, "titel": domain, "site": "DuckDuckGo"})
-        if len(results) >= 15:
+        prio = _DOMEIN_PRIO.get(matched, 999)
+        results.append({"url": url, "titel": domain, "site": domain, "prio": prio})
+        if len(results) >= 20:
             break
+
+    # Sorteer: Nederlandse sites (lage prio-score) eerst, daarna internationale
+    results.sort(key=lambda x: x["prio"])
+    # Verwijder het hulpveld voor de frontend
+    for r in results:
+        del r["prio"]
 
     return {"links": results}
 
