@@ -14,6 +14,7 @@ from http.cookiejar import CookieJar
 from html.parser import HTMLParser
 import gzip
 import json
+import re
 
 
 class RecipeExtractor(HTMLParser):
@@ -126,6 +127,19 @@ class RecipeExtractor(HTMLParser):
         return "\n".join(self.result)
 
 
+def parse_iso_duration(s) -> int:
+    """Zet ISO 8601 duration (PT30M, PT1H15M) om naar minuten. Geeft 0 terug bij onbekend."""
+    if not s or not isinstance(s, str):
+        return 0
+    s = s.upper()
+    m = re.search(r'(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$', s)
+    if not m or not any(m.groups()):
+        return 0
+    hours = int(m.group(1) or 0)
+    minutes = int(m.group(2) or 0)
+    return hours * 60 + minutes
+
+
 def extract_recipe_from_schema(schema: dict, url: str) -> dict:
     """Zet een schema.org/Recipe object om naar ons recept-formaat."""
 
@@ -198,6 +212,14 @@ def extract_recipe_from_schema(schema: dict, url: str) -> dict:
     keuken_raw = schema.get("recipeCuisine", "")
     keuken = txt(keuken_raw) if keuken_raw else ""
 
+    prep  = parse_iso_duration(schema.get("prepTime", ""))
+    cook  = parse_iso_duration(schema.get("cookTime", ""))
+    total = parse_iso_duration(schema.get("totalTime", ""))
+    # tijdBereiding = actieve tijd (prep + cook); valt terug op totalTime als beide 0 zijn
+    tijd_bereiding = (prep + cook) if (prep or cook) else total
+    # tijdWacht = resterende passieve tijd als totalTime groter is dan prep+cook
+    tijd_wacht = max(0, total - prep - cook) if total and (prep or cook) and total > prep + cook else 0
+
     return {
         "schema_recept": {
             "titel": titel,
@@ -208,6 +230,8 @@ def extract_recipe_from_schema(schema: dict, url: str) -> dict:
             "keuken": keuken,
             "afbeelding": afbeelding,
             "bron": url,
+            "tijdBereiding": tijd_bereiding,
+            "tijdWacht": tijd_wacht,
         }
     }
 

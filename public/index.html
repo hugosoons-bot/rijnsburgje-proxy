@@ -884,6 +884,8 @@ async function zoekUrl(){
         categorie:'',tags:[],notities:'',
         bron:q,
         afbeelding:sr.afbeelding||pd.image||'',
+        tijdBereiding:sr.tijdBereiding||0,
+        tijdWacht:sr.tijdWacht||0,
         rating:0,opgeslagen:false,datum,
       };
       S.resultaten=[recept];
