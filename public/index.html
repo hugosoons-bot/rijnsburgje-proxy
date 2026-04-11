@@ -330,6 +330,8 @@ function toSB(r){
     tags:r.tags||[],servings:r.personen||4,
     rating:r.rating||null,notes:r.notities||null,
     is_public:r.publiek||false,
+    prep_time:parseInt(r.tijdBereiding)||0,
+    wait_time:parseInt(r.tijdWacht)||0,
   };
 }
 function fromSB(row){
@@ -340,6 +342,7 @@ function fromSB(row){
     keuken:row.cuisine||'',categorie:row.category||'',
     tags:row.tags||[],personen:row.servings||4,
     rating:row.rating||0,notities:row.notes||'',
+    tijdBereiding:row.prep_time||0,tijdWacht:row.wait_time||0,
     opgeslagen:true,datum:row.created_at?row.created_at.split('T')[0]:'',
     publiek:row.is_public||false,eigenaarId:row.user_id,
   };
