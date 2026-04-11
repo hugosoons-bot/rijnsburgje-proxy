@@ -142,6 +142,26 @@ textarea.inp{resize:vertical}
 .empty{text-align:center;padding:50px 20px;color:var(--text3);font-size:14px}
 .empty span{font-size:36px;display:block;margin-bottom:10px}
 .hint{text-align:center;padding:30px 20px;color:var(--text3);font-size:13px;font-style:italic}
+/* ── Onboarding ── */
+#ob-ovl{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
+.ob-kaart{background:var(--surface);border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.ob-illu{height:200px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+.ob-emoji{font-size:64px;line-height:1}
+@keyframes ob-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes ob-slide-fwd{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes ob-slide-back{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes ob-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.ob-fwd{animation:ob-slide-fwd .28s cubic-bezier(.4,0,.2,1)}
+.ob-back{animation:ob-slide-back .28s cubic-bezier(.4,0,.2,1)}
+.ob-body{padding:24px 24px 20px}
+.ob-stap-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.ob-titel{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px;line-height:1.25}
+.ob-tekst{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:20px}
+.ob-dots{display:flex;gap:6px;justify-content:center;margin-bottom:20px}
+.ob-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);transition:all .2s}
+.ob-dot.on{background:var(--accent);width:20px;border-radius:4px}
+.ob-nav{display:flex;gap:10px}
+.ob-mini-ui{background:var(--surface2);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--text2);margin-top:8px;border:1px solid var(--border)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .laad-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;color:var(--text3);font-size:13px}
 .laad-cirkel{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite}
@@ -180,9 +200,14 @@ textarea.inp{resize:vertical}
 
 <div id="hdr">
   <div id="hdr-inner">
-    <div style="display:flex;align-items:baseline;gap:8px">
-      <h1>Restaurant <span>'t Rijnsburgje</span></h1>
-      <span style="font-size:16px">🍳</span>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <h1>Restaurant <span>'t Rijnsburgje</span></h1>
+        <span style="font-size:16px">🍳</span>
+      </div>
+      <button onclick="startOnboarding()" title="Rondleiding" style="background:none;border:none;cursor:pointer;padding:4px;opacity:.6;color:#f5e6c8;font-size:18px;line-height:1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      </button>
     </div>
     <div id="hdr-sub">laden...</div>
     <div id="tabs">
@@ -266,6 +291,7 @@ let S={
   zoekIngr:'',zoekLinks:[],zoekModus:'zoek',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
+  onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:'',mTags:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
@@ -1392,6 +1418,7 @@ async function registreer(){
     S.gebruiker=data.user;S.profiel={display_name:naam};
     await lod();S.scherm='app';render();
     await verwerkPendingVolg();
+    startOnboarding();
   }catch(e){S.authFout=e.message||'Er ging iets mis';}
   finally{S.authLaden=false;render();}
 }
@@ -1417,6 +1444,132 @@ async function uitloggen(){
   await DB.auth.signOut();
   Object.assign(S,{gebruiker:null,profiel:null,recepten:[],geselecteerd:[],weekPers:{},shopItems:[],extraItems:[],resultaten:[],scherm:'login',authTab:'login',authFout:''});
   render();
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+const OB_STAPPEN=[
+  {
+    kleur:'linear-gradient(135deg,#2d1f0e 0%,#4a2e0a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-bounce 2s ease-in-out infinite">🍳</div>
+          <div style="font-family:'Playfair Display',serif;font-size:15px;color:#f5e6c8;font-style:italic;margin-top:4px">'t Rijnsburgje</div>`,
+    titel:'Welkom bij de receptenapp!',
+    tekst:'Jouw persoonlijke plek voor recepten, weekmenu en boodschappen. We laten je in een paar stappen zien wat je allemaal kunt.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#1a2e1a 0%,#2a4a2a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-pulse 2.5s ease-in-out infinite">📖</div>
+          <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#c8e6c8">
+            ★★★★☆ &nbsp;|&nbsp; Italiaans &nbsp;|&nbsp; Snel
+          </div>`,
+    tab:'Recepten',
+    titel:'Al je recepten op één plek',
+    tekst:'Sla recepten op en geef ze een sterrenrating, keuken en categorie. Filter en zoek door je eigen collectie. Voeg persoonlijke notities toe.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#0e1e2e 0%,#1a3a5a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-bounce 2.2s ease-in-out infinite">🔍</div>
+          <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#c8dff0;font-size:11px">
+            Zoekt op 34 receptsites tegelijk
+          </div>`,
+    tab:'Ontdekken',
+    titel:'Recepten ontdekken',
+    tekst:'Zoek op ingredient of gerecht en de app haalt recepten op van echte websites. Of plak een URL, upload een foto — alles wordt automatisch verwerkt.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#1e1a0e 0%,#3a2e0a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-pulse 2s ease-in-out infinite">📅</div>
+          <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#f0e0b0;font-size:11px">
+            Ma · Di · Wo · Do · Vr · Za · Zo
+          </div>`,
+    tab:'Weekmenu',
+    titel:'Weekmenu plannen',
+    tekst:'Wijs recepten toe aan dagen van de week en stel porties in. Deel je weekmenu met volgers. Alles staat overzichtelijk bij elkaar.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#0e1e1a 0%,#1a3a30 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-bounce 2.4s ease-in-out infinite">🛒</div>
+          <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#b0e8d8;font-size:11px">
+            ✓ Courgette &nbsp; ✓ Knoflook &nbsp; · Pasta
+          </div>`,
+    tab:'Boodschappen',
+    titel:'Boodschappenlijst',
+    tekst:'Vanuit je weekmenu maakt de app automatisch een boodschappenlijst, gesorteerd op afdeling. Vink items af terwijl je boodschappen doet.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#1a0e2e 0%,#2e1a4a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-pulse 2.6s ease-in-out infinite">👥</div>
+          <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#d4b0f0;font-size:11px">
+            Volg vrienden · Bekijk hun weekmenu
+          </div>`,
+    tab:'Vrienden',
+    titel:'Vrienden & volgers',
+    tekst:'Volg collega\'s en vrienden. Bekijk hun recepten en weekmenu in je feed. Deel je eigen recepten en laat anderen weten waar je deze week zin in hebt.',
+  },
+  {
+    kleur:'linear-gradient(135deg,#2d1f0e 0%,#4a2e0a 100%)',
+    illu:`<div class="ob-emoji" style="animation:ob-bounce 1.8s ease-in-out infinite">🎉</div>`,
+    titel:'Je bent er klaar voor!',
+    tekst:'Start met het ontdekken van recepten. Zoek op een gerecht of ingrediënt, plak een URL of upload een foto van een recept.',
+    cta:true,
+  },
+];
+
+function stapOnboarding(delta){
+  const nieuw=S.onboardingStap+delta;
+  if(nieuw<0||nieuw>=OB_STAPPEN.length)return;
+  S.onboardingRichting=delta>0?'fwd':'back';
+  S.onboardingStap=nieuw;
+  renderOnboardingOverlay();
+}
+
+function sluitOnboarding(naarOntdekken=false){
+  document.getElementById('ob-ovl')?.remove();
+  S.onboarding=false;
+  if(naarOntdekken){S.tab='zoeken';render();}
+}
+
+function renderOnboardingOverlay(){
+  const stap=OB_STAPPEN[S.onboardingStap];
+  const totaal=OB_STAPPEN.length;
+  const isLaatste=S.onboardingStap===totaal-1;
+  const isEerste=S.onboardingStap===0;
+  const richting=S.onboardingRichting;
+
+  const dots=OB_STAPPEN.map((_,i)=>`<div class="ob-dot${i===S.onboardingStap?' on':''}"></div>`).join('');
+
+  const html=`
+    <div id="ob-ovl" onclick="if(event.target===this)sluitOnboarding()">
+      <div class="ob-kaart">
+        <div class="ob-illu" style="background:${stap.kleur}">
+          <div class="${richting==='fwd'?'ob-fwd':'ob-back'}" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+            ${stap.illu}
+          </div>
+        </div>
+        <div class="ob-body">
+          <div class="${richting==='fwd'?'ob-fwd':'ob-back'}">
+            ${stap.tab?`<div class="ob-stap-label">Tab: ${stap.tab}</div>`:`<div class="ob-stap-label">Stap ${S.onboardingStap+1} van ${totaal}</div>`}
+            <div class="ob-titel">${stap.titel}</div>
+            <div class="ob-tekst">${stap.tekst}</div>
+          </div>
+          <div class="ob-dots">${dots}</div>
+          <div class="ob-nav">
+            ${!isEerste?`<button class="btn btn-ghost" onclick="stapOnboarding(-1)" style="flex:1">← Vorige</button>`:`<button class="btn btn-ghost" onclick="sluitOnboarding()" style="flex:1">Overslaan</button>`}
+            ${isLaatste
+              ?`<button class="btn btn-accent" onclick="sluitOnboarding(true)" style="flex:2">Ga naar Ontdekken →</button>`
+              :`<button class="btn btn-accent" onclick="stapOnboarding(1)" style="flex:2">${isEerste?'Rondleiding starten →':'Volgende →'}</button>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const bestaand=document.getElementById('ob-ovl');
+  if(bestaand){bestaand.outerHTML=html;}
+  else{document.body.insertAdjacentHTML('beforeend',html);}
+}
+
+function startOnboarding(){
+  S.onboarding=true;S.onboardingStap=0;S.onboardingRichting='fwd';
+  renderOnboardingOverlay();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
