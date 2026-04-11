@@ -273,13 +273,24 @@ def fetch_links(url: str) -> dict:
     def same_domain(href_netloc, base_netloc):
         return href_netloc.lstrip("www.") == base_netloc.lstrip("www.")
 
-    # Paden die duidelijk geen recept zijn (navigatie, accounts, tags, etc.)
+    # Paden die duidelijk geen recept zijn (navigatie, accounts, acties, etc.)
     NAV_PATRONEN = (
         "/tag/", "/tags/", "/category/", "/categorie/", "/author/", "/auteur/",
         "/page/", "/pagina/", "/?page", "/account", "/login", "/register",
         "/contact", "/about", "/zoeken", "/search", "/shop", "/winkel",
-        "/cart", "/checkout", "/sitemap", "/feed", "/wp-", ".xml", ".json",
-        "#", "?s=", "?q=", "?query=",
+        "/cart", "/checkout", "/sitemap", "/feed", "/wp-",
+        "/actie", "/acties", "/aanbieding", "/aanbiedingen",
+        "/winactie", "/winacties", "/spaaractie", "/spaarprogramma",
+        "/bonus", "/korting", "/folder", "/newsletter", "/nieuwsbrief",
+        "/privacy", "/cookie", "/terms", "/voorwaarden",
+        ".xml", ".json", "#", "?s=", "?q=", "?query=",
+    )
+    # Titels die wijzen op promotie/navigatie (hoofdletterongevoelig)
+    NAV_TITELS = (
+        "win ", "actie", "aanbieding", "spaar", "korting", "bonus",
+        "nieuwsbrief", "abonneer", "inloggen", "registreer",
+        "meer lezen", "lees meer", "read more", "bekijk alle",
+        "terug naar", "home", "vorige", "volgende",
     )
 
     # Woorden die sterk wijzen op een receptpagina (in pad of titel)
@@ -295,9 +306,10 @@ def fetch_links(url: str) -> dict:
         path = parsed_href.path.lower()
         if any(p in path or p in href.lower() for p in NAV_PATRONEN):
             continue
-        # Titel moet minstens 5 tekens zijn en geen navigatielabel zijn
+        # Titel moet minstens 5 tekens zijn en geen promotie/navigatielabel zijn
         titel = link["titel"].strip()
-        if len(titel) < 5 or titel.lower() in ("home", "meer", "lees meer", "read more", "volgende", "next", "vorige", "previous"):
+        titel_lower = titel.lower()
+        if len(titel) < 5 or any(w in titel_lower for w in NAV_TITELS):
             continue
         # Accepteer als het pad recept-achtig is OF de titel lang genoeg is (echte receptnamen)
         pad_ok = any(w in path for w in RECEPT_WOORDEN_PAD)

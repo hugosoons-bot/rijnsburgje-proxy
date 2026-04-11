@@ -260,7 +260,7 @@ let S={
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
   ontdekTab:'zoeken',zoekUrl:'',
-  zoekIngr:'',zoekTermVal:'',zoekLinks:[],
+  zoekIngr:'',zoekLinks:[],zoekModus:'zoek',
   zoekDieet:'alles',zoekKeuken:'Alle',zoekTijd:'',
   laden:false,fout:'',resultaten:[],
   editId:null,mK:'',mC:'',mTags:[],
@@ -671,15 +671,22 @@ function normaliseer(parsed,fallbackBron){
   }));
 }
 
-async function zoekTerm(){
-  bewaarZoekVelden();
-  const ingr=S.zoekIngr.trim();
-  if(!ingr){S.fout='Vul een ingrediënt of zoekterm in';rIP();return;}
-  const q=encodeURIComponent(ingr);
-  S.laden=true;S.fout='';S.zoekLinks=[];render();
+function bouwZoekQuery(basis){
+  // Verrijk de zoekterm met actieve filters zodat sites relevantere resultaten geven
+  const delen=[basis];
+  if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
+  if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
+  if(S.zoekTijd){
+    const tijdLabel={'30':'snel 30 minuten','60':'60 minuten','90':'90 minuten'}[S.zoekTijd]||S.zoekTijd;
+    delen.push(tijdLabel);
+  }
+  return encodeURIComponent(delen.filter(Boolean).join(' '));
+}
 
-  // Zoek in batches van 5 sites tegelijk zodat resultaten snel binnenkomen
+async function verzamelLinks(q){
+  // Zoek in batches van 5 sites, geef links terug zodra ze binnenkomen
   const BATCH=5;
+  let links=[];
   for(let i=0;i<RECEPTSITES.length;i+=BATCH){
     const batch=RECEPTSITES.slice(i,i+BATCH);
     const resultaten=await Promise.all(batch.map(async site=>{
@@ -688,16 +695,94 @@ async function zoekTerm(){
         const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
         if(!r.ok)return[];
         const d=await r.json();
-        return(d.links||[]).map(l=>({...l,site:site.naam}));
+        return(d.links||[]).slice(0,2).map(l=>({...l,site:site.naam}));
       }catch{return[];}
     }));
-    S.zoekLinks=[...S.zoekLinks,...resultaten.flat()];
-    render(); // Toon resultaten zodra ze binnenkomen
+    links=[...links,...resultaten.flat()];
+    // Stop zodra we genoeg kandidaten hebben
+    if(links.length>=12)break;
   }
+  return links;
+}
 
-  S.laden=false;
-  if(!S.zoekLinks.length)S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';
-  render();
+async function importeerAlsRecept(url){
+  const pr=await fetch('/fetch?url='+encodeURIComponent(url));
+  if(!pr.ok)return null;
+  const pd=await pr.json();
+  if(pd.schema_recept){
+    const sr=pd.schema_recept;
+    const datum=new Date().toISOString().split('T')[0];
+    return{
+      id:'r'+Date.now()+Math.random().toString(36).slice(2),
+      titel:sr.titel||'Recept',omschrijving:sr.omschrijving||'',
+      personen:sr.personen||4,ingredienten:sr.ingredienten||[],stappen:sr.stappen||[],
+      keuken:sr.keuken||'',categorie:'',tags:[],notities:'',bron:url,
+      afbeelding:sr.afbeelding||pd.image||'',rating:0,opgeslagen:false,datum,
+    };
+  }
+  if(!pd.text||pd.text.length<100)return null;
+  try{
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${url}\n\n${pd.text.slice(0,5000)}`}]);
+    if(!Array.isArray(parsed)||!parsed.length)return null;
+    const r=normaliseer(parsed,url)[0];
+    if(pd.image&&!r.afbeelding)r.afbeelding=pd.image;
+    return r;
+  }catch{return null;}
+}
+
+async function autoImportTopLinks(links,max=3){
+  // Importeer maximaal `max` resultaten in parallel, toon zodra ze binnenkomen
+  const kandidaten=links.slice(0,max*2); // Neem wat extra voor uitval
+  let gevonden=0;
+  await Promise.all(kandidaten.map(async link=>{
+    if(gevonden>=max)return;
+    const recept=await importeerAlsRecept(link.url);
+    if(recept&&gevonden<max){
+      gevonden++;
+      S.resultaten=[...S.resultaten,recept];
+      render();
+    }
+  }));
+}
+
+async function zoekTerm(){
+  bewaarZoekVelden();
+  const ingr=S.zoekIngr.trim();
+  if(!ingr){S.fout='Vul in waar je zin in hebt';rIP();return;}
+  S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
+  try{
+    const q=bouwZoekQuery(ingr);
+    const links=await verzamelLinks(q);
+    S.zoekLinks=links;
+    if(!links.length){S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';return;}
+    await autoImportTopLinks(links,3);
+    if(!S.resultaten.length)S.fout='Recepten konden niet worden geladen. Probeer opnieuw.';
+  }catch(e){S.fout=e.message;}
+  finally{S.laden=false;render();}
+}
+
+async function verasMe(){
+  S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
+  try{
+    // Claude bedenkt 2 zoektermen passend bij de filters
+    const filterOmschrijving=[
+      S.zoekDieet!=='alles'?`dieet: ${S.zoekDieet}`:'',
+      S.zoekKeuken!=='Alle'?`keuken: ${S.zoekKeuken}`:'',
+      S.zoekTijd?`max bereidingstijd: ${S.zoekTijd} minuten`:'',
+    ].filter(Boolean).join(', ')||'geen specifieke filters';
+    const sys='Geef ALLEEN een pure JSON array van strings. Geen tekst, geen backticks. Voorbeeld: ["courgette soep","snelle pasta"]';
+    const zoektermen=await callAPI([{role:'user',content:`Stel 2 verschillende lekkere zoektermen voor om op te zoeken op een receptsite. Filters: ${filterOmschrijving}. Geef korte, concrete zoektermen (bijv. "kip tikka masala", "vegetarische pasta"). JSON array van 2 strings.`}],false,200,sys);
+    if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Geen suggesties ontvangen');
+
+    // Zoek voor elke term op de sites en importeer het beste resultaat
+    for(const term of zoektermen.slice(0,2)){
+      const q=bouwZoekQuery(term);
+      const links=await verzamelLinks(q);
+      if(links.length)await autoImportTopLinks(links,1);
+    }
+    if(!S.resultaten.length)S.fout='Geen recepten gevonden. Probeer opnieuw.';
+  }catch(e){S.fout=e.message;}
+  finally{S.laden=false;render();}
 }
 
 async function zoekUrl(){
@@ -1011,27 +1096,35 @@ function renderZoeken(){
 
   let paneel='';
   if(S.ontdekTab==='zoeken'){
-    const siteNamen=RECEPTSITES.map(s=>s.naam).join(', ');
-    const linkHTML=S.zoekLinks.length?`
-      <div style="margin-top:16px">
-        <p style="font-size:12px;color:var(--text3);margin-bottom:10px">${S.zoekLinks.length} resultaten van echte receptsites — klik om het recept te importeren</p>
-        ${S.zoekLinks.map(l=>`
-          <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="importeerLink('${h(l.url)}')">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(l.titel)}</div>
-              <div style="font-size:11px;color:var(--text3)">${h(l.site)}</div>
-            </div>
-            <span style="font-size:12px;color:var(--accent);flex-shrink:0">Importeer →</span>
-          </div>`).join('')}
-      </div>`:'';
+    const tijdOpties=[{v:'',l:'Alle'},{v:'30',l:'≤ 30 min'},{v:'60',l:'≤ 60 min'},{v:'90',l:'≤ 90 min'}];
     paneel=`
-      <p class="search-hint" style="margin-bottom:12px">Zoekt op echte receptsites: ${siteNamen}. Klik op een resultaat om het recept te importeren.</p>
-      <div style="margin-bottom:12px">
-        <span class="sec-label">Ingrediënt of zoekterm</span>
-        <input id="z-ingr" class="inp" placeholder="bijv. courgette, kip, lasagne..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
+      <div class="mode-row" style="margin-bottom:16px">
+        <button class="mb${S.zoekModus==='zoek'?' on':''}" onclick="S.zoekModus='zoek';rIP()">🔍 Zoeken</button>
+        <button class="mb${S.zoekModus==='verras'?' on':''}" onclick="S.zoekModus='verras';rIP()">✨ Verras me</button>
       </div>
-      <button class="btn btn-accent btn-w" onclick="zoekTerm()" ${busy?'disabled':''}>${busy?'Zoeken op receptsites...':'Zoeken op receptsites →'}</button>
-      ${linkHTML}`;
+      ${S.zoekModus==='zoek'?`
+        <div style="margin-bottom:12px">
+          <span class="sec-label">Waar heb je zin in?</span>
+          <input id="z-ingr" class="inp" placeholder="bijv. snelle hap met kip, lasagne, veel groenten..." value="${h(S.zoekIngr)}" onkeydown="if(event.key==='Enter')zoekTerm()">
+          <p class="search-hint">Je kunt een ingrediënt, gerecht of een omschrijving intypen.</p>
+        </div>`:`
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">De app zoekt 2 recepten voor je op echte websites, passend bij je filters.</p>`}
+      <div style="margin-bottom:12px">
+        <span class="sec-label">Bereidingstijd</span>
+        <div class="filter-row">${tijdOpties.map(t=>`<button class="fb${S.zoekTijd===t.v?' on':''}" onclick="S.zoekTijd='${t.v}';rIP()">${t.l}</button>`).join('')}</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <span class="sec-label">Dieet</span>
+        <div class="filter-row">${dieten.map(d=>`<button class="fb${S.zoekDieet===d.v?' on':''}" onclick="S.zoekDieet='${d.v}';rIP()">${d.l}</button>`).join('')}</div>
+      </div>
+      <div style="margin-bottom:16px">
+        <span class="sec-label">Keuken</span>
+        <div class="filter-row">${['Alle',...KEUKEN].map(k=>`<button class="fb${S.zoekKeuken===k?' on':''}" onclick="S.zoekKeuken='${k}';rIP()">${k}</button>`).join('')}</div>
+      </div>
+      ${S.zoekModus==='zoek'
+        ?`<button class="btn btn-accent btn-w" onclick="zoekTerm()" ${busy?'disabled':''}>${busy?'Recepten zoeken...':'Zoek op receptsites →'}</button>`
+        :`<button class="btn btn-accent btn-w" onclick="verasMe()" ${busy?'disabled':''}>${busy?'Recepten zoeken...':'Verras me →'}</button>`
+      }`;
   } else if(S.ontdekTab==='url'){
     paneel=`
       <span class="sec-label">Plak een recept-URL</span>
@@ -1057,8 +1150,8 @@ function renderZoeken(){
     </div>
     ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)}</div>`:''}
     ${S.resultaten.length>0
-      ?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden</p><div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
-      :(S.ontdekTab==='zoeken'?'':(!busy?'<div class="hint">Plak een URL of upload een foto om een recept te importeren.</div>':'<div class="hint">Even geduld...</div>'))}`;
+      ?`${busy?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">Bezig met laden... (${S.resultaten.length} gevonden)</p>`:`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden van echte receptsites</p>`}<div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
+      :(!busy&&S.ontdekTab!=='zoeken'?'<div class="hint">Plak een URL of upload een foto om een recept te importeren.</div>':'')}`;
 }
 
 function renderWeekmenu(){
