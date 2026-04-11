@@ -354,11 +354,13 @@ def fetch_and_extract(url: str) -> dict:
 
     req = Request(url, headers=headers)
 
+    final_url = url
     try:
         with urlopen(req, timeout=12) as resp:
             content_type = resp.headers.get("Content-Type", "")
             if "html" not in content_type:
                 return {"error": f"Geen HTML pagina ({content_type})"}
+            final_url = getattr(resp, "url", url)
             html = resp.read().decode("utf-8", errors="replace")
 
     except HTTPError as e:
@@ -368,28 +370,40 @@ def fetch_and_extract(url: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
+    # Detecteer OAuth/SSO-redirects aan de hand van de eindURL (betrouwbaarder dan paginatitel)
+    OAUTH_DOMEINEN = ("token.roularta.nl", "login.roularta.nl", "accounts.google.com",
+                      "login.microsoftonline.com", "auth0.com", "okta.com")
+    AUTH_PADEN = ("/oauth/", "/authorize", "/login/callback", "/signin", "/sso/")
+    final_lower = final_url.lower()
+    from urllib.parse import urlparse as _up
+    final_host = _up(final_url).netloc.lower()
+
+    if any(d in final_host for d in OAUTH_DOMEINEN) or \
+       any(p in final_lower for p in AUTH_PADEN):
+        return {
+            "error": (
+                "Deze site vereist inloggen om recepten te bekijken. "
+                "Open de URL in je browser terwijl je bent ingelogd en kopieer "
+                "de tekst handmatig, of zoek hetzelfde recept op een andere site."
+            )
+        }
+
     extractor = RecipeExtractor()
     extractor.feed(html)
     text = extractor.get_text()
     title = extractor.page_title.strip()
 
-    # Detecteer login- en paywallpagina's — geef direct een bruikbare foutmelding
-    LOGIN_SIGNALEN = (
-        "inloggen", "login", "sign in", "aanmelden", "log in",
-        "meld aan", "abonnement", "subscriber only", "premium",
-        "access denied", "toegang geweigerd", "niet gevonden",
-    )
-    if title and any(s in title.lower() for s in LOGIN_SIGNALEN):
+    # Detecteer ook expliciete loginpagina's via de paginatitel
+    LOGIN_TITELS = ("inloggen", "login", "sign in", "aanmelden", "log in",
+                    "subscriber only", "access denied", "toegang geweigerd")
+    if title and any(s in title.lower() for s in LOGIN_TITELS):
         return {
             "error": (
-                f"Deze pagina vereist een account of abonnement "
-                f"(\"{title}\"). Probeer een recept van een gratis site."
+                "Deze site vereist inloggen om recepten te bekijken. "
+                "Open de URL in je browser terwijl je bent ingelogd, of "
+                "zoek hetzelfde recept op een andere site."
             )
         }
-
-    # Controleer ook de eindURL na eventuele redirects
-    if any(s in url.lower() for s in ("/login", "/signin", "/auth", "/subscribe", "/paywall")):
-        return {"error": "Deze URL leidt door naar een inlogpagina. Probeer een gratis receptensite."}
 
     if len(text) < 100:
         return {"error": "Pagina te kort of leeg — mogelijk een fout of leeg recept"}
