@@ -14,7 +14,7 @@ import json
 
 
 class RecipeExtractor(HTMLParser):
-    """Haalt leesbare tekst + og:image + JSON-LD Recipe schema uit HTML."""
+    """Haalt leesbare tekst + og:image + JSON-LD Recipe schema + paginatitel uit HTML."""
 
     SKIP_TAGS = {"style", "nav", "header", "footer",
                  "aside", "noscript", "iframe", "form", "button", "svg"}
@@ -30,6 +30,9 @@ class RecipeExtractor(HTMLParser):
         self.schema_recipe = None
         # Regular script tracking (skip content)
         self._in_script = False
+        # Title tracking
+        self._in_title = False
+        self.page_title = ""
 
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
@@ -38,6 +41,10 @@ class RecipeExtractor(HTMLParser):
             prop = attrs_dict.get("property", "") or attrs_dict.get("name", "")
             if prop in ("og:image", "twitter:image", "og:image:url"):
                 self.image = attrs_dict.get("content") or None
+
+        if tag == "title":
+            self._in_title = True
+            return
 
         if tag == "script":
             stype = attrs_dict.get("type", "")
@@ -52,6 +59,10 @@ class RecipeExtractor(HTMLParser):
             self._skip_depth += 1
 
     def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+            return
+
         if tag == "script":
             if self._in_jsonld:
                 self._parse_jsonld(self._jsonld_buf)
@@ -64,6 +75,10 @@ class RecipeExtractor(HTMLParser):
             self._skip_depth -= 1
 
     def handle_data(self, data):
+        if self._in_title:
+            self.page_title += data
+            return
+
         if self._in_jsonld:
             self._jsonld_buf += data
             return
@@ -356,13 +371,32 @@ def fetch_and_extract(url: str) -> dict:
     extractor = RecipeExtractor()
     extractor.feed(html)
     text = extractor.get_text()
+    title = extractor.page_title.strip()
+
+    # Detecteer login- en paywallpagina's — geef direct een bruikbare foutmelding
+    LOGIN_SIGNALEN = (
+        "inloggen", "login", "sign in", "aanmelden", "log in",
+        "meld aan", "abonnement", "subscriber only", "premium",
+        "access denied", "toegang geweigerd", "niet gevonden",
+    )
+    if title and any(s in title.lower() for s in LOGIN_SIGNALEN):
+        return {
+            "error": (
+                f"Deze pagina vereist een account of abonnement "
+                f"(\"{title}\"). Probeer een recept van een gratis site."
+            )
+        }
+
+    # Controleer ook de eindURL na eventuele redirects
+    if any(s in url.lower() for s in ("/login", "/signin", "/auth", "/subscribe", "/paywall")):
+        return {"error": "Deze URL leidt door naar een inlogpagina. Probeer een gratis receptensite."}
 
     if len(text) < 100:
-        return {"error": "Pagina te kort of leeg"}
+        return {"error": "Pagina te kort of leeg — mogelijk een fout of leeg recept"}
 
     result = {
         "url": url,
-        "text": text[:6000],
+        "text": text[:10000],   # ruimer: lange recepten met veel stappen/ingrediënten
         "length": len(text),
     }
 

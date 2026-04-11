@@ -622,6 +622,20 @@ Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zo
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
 Ingrediënten en stappen letterlijk overnemen. Nederlands. Bron: echte werkende URL van de receptpagina.`;
 
+const SYS_URL=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
+Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
+Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
+Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
+ABSOLUTE REGELS — overtreding is niet toegestaan:
+1. Neem ALLEEN ingrediënten over die letterlijk in de aangeleverde tekst staan. Voeg NOOIT een ingrediënt toe dat niet expliciet vermeld wordt.
+2. Neem hoeveelheden EXACT over zoals ze in de tekst staan. Verander NOOIT een hoeveelheid.
+3. Neem eenheden EXACT over (g, ml, el, tl, stuks, etc.). Verander NOOIT een eenheid.
+4. Als een ingrediënt of hoeveelheid niet duidelijk leesbaar is: zet de ruwe tekst in het naam-veld, hoeveelheid=1, eenheid="x". Gok nooit.
+5. Neem bereidingstijd over als die vermeld staat (in het omschrijving- of notities-veld).
+6. Zet de introductietekst of beschrijving van het recept in het notities-veld.
+7. Als de tekst geen herkenbaar recept bevat: geef een lege array [].
+Datum: gebruik DATUM.`;
+
 const SYS_FOTO=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
 Per recept: {"id":"slug","titel":"","omschrijving":"1 zin","personen":4,"ingredienten":[{"naam":"","hoeveelheid":1,"eenheid":""}],"stappen":[""],"keuken":"","categorie":"","tags":[],"notities":"","bron":"","afbeelding":"","rating":0,"opgeslagen":false,"datum":"DATUM"}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
@@ -750,7 +764,7 @@ async function importeerAlsRecept(url){
   }
   if(!pd.text||pd.text.length<100)return null;
   try{
-    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${url}\n\n${pd.text.slice(0,5000)}`}]);
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Bron URL: ${url}\n\n${pd.text.slice(0,8000)}`}],false,2000,SYS_URL);
     if(!Array.isArray(parsed)||!parsed.length)return null;
     const r=normaliseer(parsed,url)[0];
     if(pd.image&&!r.afbeelding)r.afbeelding=pd.image;
@@ -854,7 +868,7 @@ async function zoekUrl(){
 
     // Geen JSON-LD: stuur tekst naar Claude
     if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
-    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${q}\n\n${pd.text.slice(0,5000)}`}]);
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Bron URL: ${q}\n\n${pd.text.slice(0,8000)}`}],false,2000,SYS_URL);
     if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,q);
@@ -1617,7 +1631,7 @@ async function importeerLink(url){
       return;
     }
     if(!pd.text||pd.text.length<100)throw new Error('Pagina bevat te weinig tekst');
-    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Geef JSON array met 1 recept. Bron URL: ${url}\n\n${pd.text.slice(0,5000)}`}]);
+    const parsed=await callAPI([{role:'user',content:`Haal het recept uit deze tekst. Bron URL: ${url}\n\n${pd.text.slice(0,8000)}`}],false,2000,SYS_URL);
     if(pd.image&&parsed[0])parsed[0].afbeelding=pd.image;
     if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept gevonden');
     S.resultaten=normaliseer(parsed,url);
