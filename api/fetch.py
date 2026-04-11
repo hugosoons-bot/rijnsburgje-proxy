@@ -269,22 +269,46 @@ def fetch_links(url: str) -> dict:
     parsed_base = urlparse(url)
     domain = parsed_base.netloc
 
-    # Filter op links van hetzelfde domein die op recept lijken
-    RECEPT_WOORDEN = ("recept", "recipe", "gerecht", "maken")
+    # Domein-matching: negeer www. prefix bij vergelijking
+    def same_domain(href_netloc, base_netloc):
+        return href_netloc.lstrip("www.") == base_netloc.lstrip("www.")
+
+    # Paden die duidelijk geen recept zijn (navigatie, accounts, tags, etc.)
+    NAV_PATRONEN = (
+        "/tag/", "/tags/", "/category/", "/categorie/", "/author/", "/auteur/",
+        "/page/", "/pagina/", "/?page", "/account", "/login", "/register",
+        "/contact", "/about", "/zoeken", "/search", "/shop", "/winkel",
+        "/cart", "/checkout", "/sitemap", "/feed", "/wp-", ".xml", ".json",
+        "#", "?s=", "?q=", "?query=",
+    )
+
+    # Woorden die sterk wijzen op een receptpagina (in pad of titel)
+    RECEPT_WOORDEN_PAD = ("recept", "recipe", "gerecht", "dish", "cook")
+
     seen = set()
     results = []
     for link in extractor.links:
         href = link["url"]
-        if urlparse(href).netloc != domain:
+        parsed_href = urlparse(href)
+        if not same_domain(parsed_href.netloc, domain):
             continue
-        path = urlparse(href).path.lower()
-        if not any(w in path for w in RECEPT_WOORDEN):
+        path = parsed_href.path.lower()
+        if any(p in path or p in href.lower() for p in NAV_PATRONEN):
+            continue
+        # Titel moet minstens 5 tekens zijn en geen navigatielabel zijn
+        titel = link["titel"].strip()
+        if len(titel) < 5 or titel.lower() in ("home", "meer", "lees meer", "read more", "volgende", "next", "vorige", "previous"):
+            continue
+        # Accepteer als het pad recept-achtig is OF de titel lang genoeg is (echte receptnamen)
+        pad_ok = any(w in path for w in RECEPT_WOORDEN_PAD)
+        titel_ok = len(titel) > 15  # Echte receptnamen zijn doorgaans lang
+        if not pad_ok and not titel_ok:
             continue
         if href in seen:
             continue
         seen.add(href)
         results.append(link)
-        if len(results) >= 12:
+        if len(results) >= 15:
             break
 
     return {"links": results}

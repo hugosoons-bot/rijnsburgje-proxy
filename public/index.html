@@ -608,10 +608,42 @@ Datum: gebruik DATUM.`;
 
 // ── Goedgekeurde receptsites ──────────────────────────────────────────────────
 const RECEPTSITES=[
-  {naam:'Chicks Love Food', domein:'chickslovefood.com', zoek:'https://www.chickslovefood.com/?s={q}'},
-  {naam:'Lekker en Simpel',  domein:'lekkerensimpel.nl',  zoek:'https://www.lekkerensimpel.nl/?s={q}'},
-  {naam:'15gram',            domein:'15gram.nl',           zoek:'https://www.15gram.nl/?s={q}'},
-  {naam:'Smulweb',           domein:'smulweb.nl',          zoek:'https://www.smulweb.nl/recepten?query={q}'},
+  // Nederlands
+  {naam:'Allerhande',            zoek:'https://www.allerhande.nl/zoeken?query={q}'},
+  {naam:'Leuke Recepten',        zoek:'https://www.leukerecepten.nl/?s={q}'},
+  {naam:'Lekker en Simpel',      zoek:'https://www.lekkerensimpel.nl/?s={q}'},
+  {naam:'Chicks Love Food',      zoek:'https://www.chickslovefood.com/?s={q}'},
+  {naam:'15gram',                zoek:'https://www.15gram.nl/?s={q}'},
+  {naam:'Smulweb',               zoek:'https://www.smulweb.nl/recepten?query={q}'},
+  {naam:'Foodies',               zoek:'https://www.foodies.nl/?s={q}'},
+  {naam:'Miljuschka',            zoek:'https://www.miljuschka.nl/?s={q}'},
+  {naam:"Rudolph's Bakery",      zoek:'https://www.rudolphsbakery.nl/?s={q}'},
+  {naam:'24Kitchen',             zoek:'https://www.24kitchen.nl/zoeken/{q}'},
+  {naam:'Culy',                  zoek:'https://www.culy.nl/?s={q}'},
+  {naam:"Betty's Kitchen",       zoek:'https://www.bettyskitchen.nl/?s={q}'},
+  {naam:'Dille & Kamille',       zoek:'https://www.dillekamille.nl/recepten/?s={q}'},
+  // Internationaal
+  {naam:'Serious Eats',          zoek:'https://www.seriouseats.com/search?q={q}'},
+  {naam:'NYT Cooking',           zoek:'https://cooking.nytimes.com/search?q={q}'},
+  {naam:'Budget Bytes',          zoek:'https://www.budgetbytes.com/?s={q}'},
+  {naam:'The Mediterranean Dish',zoek:'https://www.themediterraneandish.com/?s={q}'},
+  {naam:'Ottolenghi',            zoek:'https://ottolenghi.co.uk/search?type=article&q={q}'},
+  {naam:'Bon Appétit',           zoek:'https://www.bonappetit.com/search?q={q}'},
+  {naam:'Minimalist Baker',      zoek:'https://minimalistbaker.com/?s={q}'},
+  {naam:'Half Baked Harvest',    zoek:'https://www.halfbakedharvest.com/?s={q}'},
+  {naam:'Pinch of Yum',          zoek:'https://pinchofyum.com/?s={q}'},
+  {naam:'Smitten Kitchen',       zoek:'https://smittenkitchen.com/?s={q}'},
+  {naam:'Cookie and Kate',       zoek:'https://cookieandkate.com/?s={q}'},
+  {naam:'Downshiftology',        zoek:'https://downshiftology.com/?s={q}'},
+  {naam:'RecipeTin Eats',        zoek:'https://www.recipetineats.com/?s={q}'},
+  {naam:'Delish',                zoek:'https://www.delish.com/search/?q={q}'},
+  {naam:'Food52',                zoek:'https://food52.com/search?q={q}'},
+  {naam:'Giallo Zafferano',      zoek:'https://www.giallozafferano.com/search/query/{q}/'},
+  {naam:'La Cucina Italiana',    zoek:'https://www.lacucinaitaliana.com/?s={q}'},
+  {naam:'Woks of Life',          zoek:'https://thewoksoflife.com/?s={q}'},
+  {naam:'Just One Cookbook',     zoek:'https://www.justonecookbook.com/?s={q}'},
+  {naam:"Marion's Kitchen",      zoek:'https://www.marionskitchen.com/?s={q}'},
+  {naam:'Hot Thai Kitchen',      zoek:'https://hot-thai-kitchen.com/?s={q}'},
 ];
 
 async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
@@ -642,22 +674,29 @@ function normaliseer(parsed,fallbackBron){
 async function zoekTerm(){
   bewaarZoekVelden();
   const ingr=S.zoekIngr.trim();
-  const term=S.zoekTermVal.trim();
-  if(!ingr&&!term){S.fout='Vul een ingrediënt of zoekterm in';rIP();return;}
-  const q=encodeURIComponent([ingr,term].filter(Boolean).join(' '));
+  if(!ingr){S.fout='Vul een ingrediënt of zoekterm in';rIP();return;}
+  const q=encodeURIComponent(ingr);
   S.laden=true;S.fout='';S.zoekLinks=[];render();
-  const alle=await Promise.all(RECEPTSITES.map(async site=>{
-    try{
-      const url=site.zoek.replace('{q}',q);
-      const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
-      if(!r.ok)return[];
-      const d=await r.json();
-      return(d.links||[]).map(l=>({...l,site:site.naam}));
-    }catch{return[];}
-  }));
-  S.zoekLinks=alle.flat();
+
+  // Zoek in batches van 5 sites tegelijk zodat resultaten snel binnenkomen
+  const BATCH=5;
+  for(let i=0;i<RECEPTSITES.length;i+=BATCH){
+    const batch=RECEPTSITES.slice(i,i+BATCH);
+    const resultaten=await Promise.all(batch.map(async site=>{
+      try{
+        const url=site.zoek.replace('{q}',q);
+        const r=await fetch('/fetch?url='+encodeURIComponent(url)+'&mode=links');
+        if(!r.ok)return[];
+        const d=await r.json();
+        return(d.links||[]).map(l=>({...l,site:site.naam}));
+      }catch{return[];}
+    }));
+    S.zoekLinks=[...S.zoekLinks,...resultaten.flat()];
+    render(); // Toon resultaten zodra ze binnenkomen
+  }
+
   S.laden=false;
-  if(!S.zoekLinks.length)S.fout='Geen recepten gevonden op de zoeksites. Probeer een andere zoekterm.';
+  if(!S.zoekLinks.length)S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';
   render();
 }
 
