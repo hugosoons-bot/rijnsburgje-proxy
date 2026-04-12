@@ -609,6 +609,8 @@ def fetch_and_extract(url: str) -> dict:
     except (RemoteDisconnected, ConnectionResetError):
         return _connection_blocked_fallback(url)
     except HTTPError as e:
+        if e.code in (403, 429, 503):
+            return _connection_blocked_fallback(url)
         return {"error": f"HTTP {e.code}: {e.reason}"}
     except URLError as e:
         if isinstance(e.reason, (RemoteDisconnected, ConnectionResetError)):

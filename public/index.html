@@ -951,20 +951,47 @@ async function zoekTerm(){
   const ingr=S.zoekIngr.trim();
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
-    // Bouw zoekopdracht en zoek via DuckDuckGo
-    const delen=ingr?[ingr]:['recept'];
-    if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
-    if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
-    const tijdTermen={'15':'15 minuten snel','30':'30 minuten snel','45':'45 minuten','60':'60 minuten'};
-    if(S.zoekTijd&&tijdTermen[S.zoekTijd])delen.push(tijdTermen[S.zoekTijd]);
-    const zoekterm=delen.filter(Boolean).join(' ');
-    const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(zoekterm));
-    if(!r.ok)throw new Error('Zoeken mislukt');
-    const d=await r.json();
-    const links=(d.links||[]);
+    let links=[];
+    if(ingr){
+      // Zoekterm ingetypt: zoek direct via DDG met term + filters
+      const delen=[ingr];
+      if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
+      if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
+      const tijdTermen={'15':'15 minuten snel','30':'30 minuten snel','45':'45 minuten','60':'60 minuten'};
+      if(S.zoekTijd&&tijdTermen[S.zoekTijd])delen.push(tijdTermen[S.zoekTijd]);
+      const zoekterm=delen.filter(Boolean).join(' ');
+      const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(zoekterm));
+      if(!r.ok)throw new Error('Zoeken mislukt');
+      const d=await r.json();
+      links=d.links||[];
+    } else {
+      // Geen zoekterm: laat Claude 2 concrete receptnamen bedenken op basis van filters.
+      // Dit garandeert dat DDG specifieke receptpagina's (met JSON-LD) teruggeeft,
+      // niet categorie-pagina's die leeg zijn.
+      const filterOmschrijving=[
+        S.zoekDieet!=='alles'?`dieet: ${S.zoekDieet}`:'',
+        S.zoekKeuken!=='Alle'?`keuken: ${S.zoekKeuken}`:'',
+        S.zoekTijd?`max bereidingstijd: ${S.zoekTijd} minuten`:'',
+      ].filter(Boolean).join(', ')||'geen specifieke filters';
+      const sys='Jij geeft ALLEEN een JSON array van 2 strings terug. Geen uitleg, geen backticks. Voorbeeld: ["spaghetti carbonara","linzensoep"]';
+      const zoektermen=await callAPI(
+        [{role:'user',content:`Noem 2 verschillende lekkere gerechten die je kunt opzoeken op een receptsite. Filters: ${filterOmschrijving}. Geef precieze gerechtnamen, kort en concreet. JSON array van 2 strings.`}],
+        false,150,sys
+      );
+      if(!Array.isArray(zoektermen)||!zoektermen.length)throw new Error('Kon geen receptsuggesties bedenken');
+      const resultaten=await Promise.all(
+        zoektermen.slice(0,2).map(async term=>{
+          const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(term));
+          if(!r.ok)return[];
+          const d=await r.json();
+          return d.links||[];
+        })
+      );
+      links=resultaten.flat();
+    }
     S.zoekLinks=links;
     if(!links.length){S.fout='Geen recepten gevonden. Probeer een andere zoekterm.';return;}
-    await autoImportTopLinks(links,5);
+    await autoImportTopLinks(links,ingr?3:4);
     if(!S.resultaten.length)S.fout='Sites gevonden maar recepten konden niet worden geladen. Probeer opnieuw.';
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
@@ -1364,7 +1391,7 @@ function renderRecepten(){
 
 function renderZoeken(){
   const busy=S.laden;
-  const dieten=[{v:'alles',l:'Geen voorkeur'},{v:'vegetarisch',l:'Vegetarisch'},{v:'veganistisch',l:'Veganistisch'},{v:'pescatarisch',l:'Pescatarisch'},{v:'lactosevrij',l:'Lactosevrij'},{v:'glutenvrij',l:'Glutenvrij'}];
+  const dieten=[{v:'alles',l:'Geen voorkeur'},{v:'vegetarisch',l:'Vegetarisch'},{v:'veganistisch',l:'Veganistisch'},{v:'pescatarisch',l:'Vis & zeevruchten'},{v:'lactosevrij',l:'Lactosevrij'},{v:'glutenvrij',l:'Glutenvrij'}];
   const tabsBtns=`
     <div class="mode-row" style="margin-bottom:16px">
       <button class="mb${S.ontdekTab==='zoeken'?' on':''}" onclick="S.ontdekTab='zoeken';render()">🔍 Zoeken</button>
