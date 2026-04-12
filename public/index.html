@@ -891,15 +891,6 @@ function tijdSticker(r){
   return`⏱ ${fmtMin(b||w)}`;
 }
 
-function bouwZoekQuery(basis){
-  const delen=[basis];
-  if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
-  if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
-  if(S.zoekTijd==='30')delen.push('snel');
-  // Geen basis en geen filters: gebruik generieke term zodat sites altijd iets teruggeven
-  const query=delen.filter(Boolean).join(' ')||'recept';
-  return encodeURIComponent(query);
-}
 
 async function verzamelLinks(q, termOorspronkelijk='', maxSites=RECEPTSITES.length){
   const res=await Promise.allSettled(
@@ -962,11 +953,12 @@ async function zoekTerm(){
   S.laden=true;S.fout='';S.resultaten=[];S.zoekLinks=[];render();
   try{
     // Bouw zoekopdracht en zoek via DuckDuckGo
-    const delen=[ingr];
+    const delen=ingr?[ingr]:['recept'];
     if(S.zoekDieet!=='alles')delen.push(S.zoekDieet);
     if(S.zoekKeuken!=='Alle')delen.push(S.zoekKeuken);
-    if(S.zoekTijd==='30')delen.push('snel');
-    const zoekterm=(delen.filter(Boolean).join(' ')||'recept');
+    const tijdTermen={'15':'15 minuten snel','30':'30 minuten snel','45':'45 minuten','60':'60 minuten'};
+    if(S.zoekTijd&&tijdTermen[S.zoekTijd])delen.push(tijdTermen[S.zoekTijd]);
+    const zoekterm=delen.filter(Boolean).join(' ');
     const r=await fetch('/fetch?mode=ddg&q='+encodeURIComponent(zoekterm));
     if(!r.ok)throw new Error('Zoeken mislukt');
     const d=await r.json();
@@ -1373,8 +1365,7 @@ function renderRecepten(){
 
 function renderZoeken(){
   const busy=S.laden;
-  const tijden=['Alle','≤ 20 min','≤ 45 min','≤ 60 min'];
-  const dieten=[{v:'alles',l:'Alles'},{v:'vegetarisch',l:'Vegetarisch'},{v:'pescetarisch',l:'Pescetarisch'},{v:'met vlees',l:'Met vlees'}];
+  const dieten=[{v:'alles',l:'Geen voorkeur'},{v:'vegetarisch',l:'Vegetarisch'},{v:'veganistisch',l:'Veganistisch'},{v:'pescatarisch',l:'Pescatarisch'},{v:'lactosevrij',l:'Lactosevrij'},{v:'glutenvrij',l:'Glutenvrij'}];
   const tabsBtns=`
     <div class="mode-row" style="margin-bottom:16px">
       <button class="mb${S.ontdekTab==='zoeken'?' on':''}" onclick="S.ontdekTab='zoeken';render()">🔍 Zoeken</button>
@@ -1395,7 +1386,8 @@ function renderZoeken(){
 
   let paneel='';
   if(S.ontdekTab==='zoeken'){
-    const tijdOpties=[{v:'',l:'Alle'},{v:'30',l:'≤ 30 min'},{v:'60',l:'≤ 60 min'},{v:'90',l:'≤ 90 min'}];
+    const tijdOpties=[{v:'',l:'Geen voorkeur'},{v:'15',l:'< 15 min'},{v:'30',l:'< 30 min'},{v:'45',l:'< 45 min'},{v:'60',l:'< 60 min'}];
+    const zoekKeuken=['Alle keukens','Italiaans','Aziatisch','Mexicaans','Indiaas','Midden-Oosters','Frans','Nederlands'];
     paneel=`
       <div class="mode-row" style="margin-bottom:16px">
         <button class="mb${S.zoekModus==='zoek'?' on':''}" onclick="S.zoekModus='zoek';rIP()">🔍 Zoeken</button>
@@ -1418,7 +1410,7 @@ function renderZoeken(){
       </div>
       <div style="margin-bottom:16px">
         <span class="sec-label">Keuken</span>
-        <div class="filter-row">${['Alle',...KEUKEN].map(k=>`<button class="fb${S.zoekKeuken===k?' on':''}" onclick="S.zoekKeuken='${k}';rIP()">${k}</button>`).join('')}</div>
+        <div class="filter-row">${zoekKeuken.map((k,i)=>`<button class="fb${(i===0?S.zoekKeuken==='Alle':S.zoekKeuken===k)?' on':''}" onclick="S.zoekKeuken='${i===0?'Alle':k}';rIP()">${k}</button>`).join('')}</div>
       </div>
       ${S.zoekModus==='zoek'
         ?`<button class="btn btn-accent btn-w" onclick="zoekTerm()" ${busy?'disabled':''}>${busy?'Recepten zoeken...':'Zoek op receptsites →'}</button>`
