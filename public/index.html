@@ -933,11 +933,10 @@ async function importeerAlsRecept(url){
 }
 
 async function autoImportTopLinks(links,max=3){
-  // Importeer maximaal `max` resultaten in parallel, toon zodra ze binnenkomen
-  const kandidaten=links.slice(0,max*2); // Neem wat extra voor uitval
+  // Probeer ALLE beschikbare links in parallel — geblokkeerde sites falen snel (<1s),
+  // werkende sites (ook internationale) worden zo niet gemist door een kunstmatig plafond.
   let gevonden=0;
-  await Promise.all(kandidaten.map(async link=>{
-    if(gevonden>=max)return;
+  await Promise.all(links.map(async link=>{
     const recept=await importeerAlsRecept(link.url);
     if(recept&&gevonden<max){
       gevonden++;
