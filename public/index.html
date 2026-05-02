@@ -451,6 +451,7 @@ let S={
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
+  vriendenFilter:{vriend:'',keuken:'',cat:''},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},
@@ -1794,11 +1795,33 @@ function renderVrienden(){
   }
 
   // Feed-weergave (standaard)
+  const vf=S.vriendenFilter;
+  const keukens=[...new Set(S.publiekeRecepten.map(r=>r.keuken).filter(Boolean))].sort();
+  const cats=[...new Set(S.publiekeRecepten.flatMap(r=>parseCats(r.categorie)))].sort();
+  let gefilterd=S.publiekeRecepten;
+  if(vf.vriend)gefilterd=gefilterd.filter(r=>r.eigenaarId===vf.vriend);
+  if(vf.keuken)gefilterd=gefilterd.filter(r=>r.keuken===vf.keuken);
+  if(vf.cat)gefilterd=gefilterd.filter(r=>parseCats(r.categorie).includes(vf.cat));
+  const filterBar=S.publiekeRecepten.length===0?'':
+    `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <select style="flex:1;min-width:130px;font-size:13px;padding:6px 10px" onchange="S.vriendenFilter.vriend=this.value;rIP()">
+        <option value="">Alle vrienden</option>
+        ${S.ikVolg.map(p=>`<option value="${p.id}"${vf.vriend===p.id?' selected':''}>${h(p.display_name)}</option>`).join('')}
+      </select>
+      <select style="flex:1;min-width:120px;font-size:13px;padding:6px 10px" onchange="S.vriendenFilter.keuken=this.value;rIP()">
+        <option value="">Alle keukens</option>
+        ${keukens.map(k=>`<option value="${k}"${vf.keuken===k?' selected':''}>${h(k)}</option>`).join('')}
+      </select>
+      <select style="flex:1;min-width:120px;font-size:13px;padding:6px 10px" onchange="S.vriendenFilter.cat=this.value;rIP()">
+        <option value="">Alle categorieën</option>
+        ${cats.map(c=>`<option value="${c}"${vf.cat===c?' selected':''}>${h(c)}</option>`).join('')}
+      </select>
+    </div>`;
   const gemeenschapHTML=S.ladenGemeenschap
     ?'<div class="hint">Recepten laden...</div>'
     :S.publiekeRecepten.length===0
       ?'<div class="hint">Nog geen publieke recepten van andere gebruikers.</div>'
-      :`<div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join('')}</div>`;
+      :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">Geen recepten gevonden voor deze filters.</div>'}</div>`;
 
   return`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px">
