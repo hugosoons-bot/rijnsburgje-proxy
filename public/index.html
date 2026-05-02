@@ -558,8 +558,8 @@ function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken]
 
 // ── Weekmenu Supabase ─────────────────────────────────────────────────────────
 function getMaandag(){
-  const d=new Date();const dag=d.getDay()||7;
-  const m=new Date(d);m.setDate(d.getDate()-(dag-1));m.setHours(0,0,0,0);
+  const d=new Date();
+  const m=new Date(d);m.setDate(d.getDate()-d.getDay());m.setHours(0,0,0,0);
   return m.toISOString().split('T')[0];
 }
 function getVolgendeWeek(){
@@ -571,14 +571,17 @@ function formatMaandag(dateStr){
   const d=new Date(dateStr+'T00:00:00');
   return d.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
 }
-function weekLabel(maandag){
-  const nu=getMaandag();
-  const diff=Math.round((new Date(maandag+'T00:00:00')-new Date(nu+'T00:00:00'))/(7*24*3600*1000));
-  if(diff===0)return'Deze week';
-  if(diff===1)return'Volgende week';
-  if(diff===-1)return'Vorige week';
-  if(diff>1)return`Over ${diff} weken`;
-  return`${-diff} weken geleden`;
+function weekNummer(startStr){
+  const ma=new Date(startStr+'T00:00:00');
+  ma.setDate(ma.getDate()+1); // zondag+1 = maandag van die ISO-week
+  const d=new Date(Date.UTC(ma.getFullYear(),ma.getMonth(),ma.getDate()));
+  const day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+function weekLabel(startStr){
+  return`Week ${weekNummer(startStr)}`;
 }
 function formatWeekBereik(maandag){
   const d=new Date(maandag+'T00:00:00');
