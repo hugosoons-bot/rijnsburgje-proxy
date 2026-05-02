@@ -580,9 +580,8 @@ function formatMaandag(dateStr){
   return d.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
 }
 function weekNummer(startStr){
-  const ma=new Date(startStr+'T00:00:00');
-  ma.setDate(ma.getDate()+1); // zondag+1 = maandag van die ISO-week
-  const d=new Date(Date.UTC(ma.getFullYear(),ma.getMonth(),ma.getDate()));
+  const p=startStr.split('-');
+  const d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
   const day=d.getUTCDay()||7;
   d.setUTCDate(d.getUTCDate()+4-day);
   const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
