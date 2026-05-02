@@ -396,7 +396,7 @@ function toSB(r){
     cuisine:r.keuken||null,category:Array.isArray(r.categorie)?JSON.stringify(r.categorie):(r.categorie?JSON.stringify([r.categorie]):null),
     tags:r.tags||[],servings:r.personen||4,
     rating:r.rating||null,notes:r.notities||null,
-    is_public:r.publiek||false,
+    is_public:r.publiek!==false,
     prep_time:parseInt(r.tijdBereiding)||0,
     wait_time:parseInt(r.tijdWacht)||0,
   };
@@ -411,7 +411,7 @@ function fromSB(row){
     rating:row.rating||0,notities:row.notes||'',
     tijdBereiding:row.prep_time||0,tijdWacht:row.wait_time||0,
     opgeslagen:true,datum:row.created_at?row.created_at.split('T')[0]:'',
-    publiek:row.is_public||false,eigenaarId:row.user_id,
+    publiek:row.is_public!==false,eigenaarId:row.user_id,
   };
 }
 async function savRecept(r){
@@ -433,7 +433,7 @@ async function togglePubliek(id){
 async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,publiek:false,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  const kopie={...r,id:nieuwId,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
   render();
   await savRecept(kopie);
@@ -548,10 +548,18 @@ async function loadRecepten(){
   if(error){console.error('Laden mislukt:',error.message);S.recepten=DEMO;return;}
   S.recepten=data.map(fromSB);
 }
+async function migreeerNaarPubliek(){
+  if(!S.gebruiker)return;
+  const ids=S.recepten.filter(r=>!r.publiek&&!r.id.startsWith('demo-')).map(r=>r.id);
+  if(!ids.length)return;
+  await DB.from('recipes').update({is_public:true}).eq('user_id',S.gebruiker.id).in('id',ids);
+  S.recepten.forEach(r=>{if(!r.publiek)r.publiek=true;});
+}
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
+  await migreeerNaarPubliek();
   await laadWeekmenu();
   await laadBoodschappen();
   await laadVrienden();
