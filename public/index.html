@@ -451,7 +451,7 @@ let S={
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
-  vriendenFilter:{vriend:'',keuken:'',cat:''},
+  vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},
@@ -1802,8 +1802,16 @@ function renderVrienden(){
   if(vf.vriend)gefilterd=gefilterd.filter(r=>r.eigenaarId===vf.vriend);
   if(vf.keuken)gefilterd=gefilterd.filter(r=>r.keuken===vf.keuken);
   if(vf.cat)gefilterd=gefilterd.filter(r=>parseCats(r.categorie).includes(vf.cat));
+  gefilterd=[...gefilterd].sort(vf.sorteer==='likes'
+    ?(a,b)=>(S.likeCounts[b.id]||0)-(S.likeCounts[a.id]||0)
+    :(a,b)=>b.datum.localeCompare(a.datum));
   const filterBar=S.publiekeRecepten.length===0?'':
     `<div class="filter-wrap">
+      <h3>↕️ Sorteren</h3>
+      <div class="filter-row" style="margin-bottom:10px">
+        <button class="fb${vf.sorteer==='nieuwste'?' on':''}" onclick="S.vriendenFilter.sorteer='nieuwste';rIP()">Nieuwste</button>
+        <button class="fb${vf.sorteer==='likes'?' on':''}" onclick="S.vriendenFilter.sorteer='likes';rIP()">Meeste likes</button>
+      </div>
       <h3>👤 Vriend</h3>
       <div class="filter-row" style="margin-bottom:10px">
         <button class="fb${vf.vriend===''?' on':''}" onclick="S.vriendenFilter.vriend='';rIP()">Alle</button>
