@@ -126,6 +126,32 @@ a{color:var(--accent);text-decoration:none}
 .cal-dag.vandaag{background:var(--blue-bg);color:var(--blue);font-weight:700}
 .cal-dag.gekozen{background:var(--accent);color:var(--color-bg);font-weight:700}
 .cal-dag.leeg{pointer-events:none;visibility:hidden}
+/* ── Datumkiezer modal ── */
+#dpk,#rpk{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:none;align-items:flex-end;justify-content:center}
+#dpk.open,#rpk.open{display:flex}
+.dpk-box{background:var(--surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:460px;box-shadow:var(--shadow-lg);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.dpk-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.dpk-head-titel{font-size:16px;font-weight:700;color:var(--text)}
+.dpk-sluit{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:0;line-height:1}
+.dpk-scroll{flex:1;overflow-y:auto;padding:14px 16px}
+.dpk-foot{flex-shrink:0;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+.dpk-gekozen{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;min-height:22px}
+.datum-pill{display:inline-flex;align-items:center;gap:5px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600}
+.datum-pill button{background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;padding:0;line-height:1}
+/* ── Dag-rijen weekmenu ── */
+.dag-rij{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
+.dag-rij-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.dag-rij-naam{font-size:13px;font-weight:700;color:var(--text)}
+.dag-rij-datum{font-size:11px;color:var(--text3)}
+.dag-rij-body{padding:8px 12px}
+.dag-recept-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
+.dag-recept-item:last-child{border-bottom:none}
+.dag-recept-naam{flex:1;font-size:13px;color:var(--text);font-weight:500}
+.dag-recept-meta{font-size:11px;color:var(--text3)}
+.dag-recept-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 6px;border-radius:4px}
+.dag-recept-del:hover{background:var(--red-bg);color:var(--red)}
+.dag-add{display:flex;align-items:center;gap:6px;padding:7px 0;color:var(--text3);font-size:13px;cursor:pointer;background:none;border:none;font-family:inherit;width:100%;text-align:left}
+.dag-add:hover{color:var(--accent)}
 
 /* ── Buttons ── */
 .btn{border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s;cursor:pointer;letter-spacing:.01em;display:inline-flex;align-items:center;gap:5px;justify-content:center;min-height:40px}
@@ -340,6 +366,34 @@ textarea.inp{resize:vertical}
   </div>
 </div>
 
+<!-- Datumkiezer modal -->
+<div id="dpk" onclick="if(event.target===this)sluitDpk()">
+  <div class="dpk-box">
+    <div class="dpk-head">
+      <span class="dpk-head-titel">Selecteer datum</span>
+      <button class="dpk-sluit" onclick="sluitDpk()">✕</button>
+    </div>
+    <div class="dpk-scroll">
+      <div id="dpk-cal"></div>
+      <div id="dpk-gekozen" class="dpk-gekozen"></div>
+    </div>
+    <div class="dpk-foot">
+      <button class="btn btn-dark btn-w" onclick="sluitDpk()">Klaar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recept-picker voor dag in weekmenu -->
+<div id="rpk" onclick="if(event.target===this)sluitRpk()">
+  <div class="dpk-box">
+    <div class="dpk-head">
+      <span class="dpk-head-titel" id="rpk-titel">Recept toevoegen</span>
+      <button class="dpk-sluit" onclick="sluitRpk()">✕</button>
+    </div>
+    <div class="dpk-scroll" id="rpk-lijst"></div>
+  </div>
+</div>
+
 <script src="/supabase.js"></script>
 <script>
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -384,7 +438,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
-  actieveWeek:null,receptWeek:{},receptDag:{},calPicker:null,vriendenSubTab:null,
+  actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
@@ -640,12 +694,19 @@ async function laadWeekmenu(){
   else{
     S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
     const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings,day_of_week').eq('menu_id',menu.id).order('day_of_week');
-    S.geselecteerd=(items||[]).map(i=>i.recipe_id);
     S.weekPers={};
+    const geselSet=new Set();
     (items||[]).forEach(i=>{
       if(i.servings)S.weekPers[i.recipe_id]=i.servings;
-      if(i.day_of_week!=null){const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);S.receptDag[i.recipe_id]=d.toISOString().split('T')[0];}
+      if(i.day_of_week!=null){
+        const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
+        const ds=d.toISOString().split('T')[0];
+        if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
+        if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
+        geselSet.add(i.recipe_id);
+      }
     });
+    S.geselecteerd=[...geselSet];
   }
   await laadAlleWeekMenus();
 }
@@ -659,10 +720,15 @@ async function laadAlleWeekMenus(){
   const weekMap={};menus.forEach(m=>weekMap[m.id]=m.week_start);
   const menuIds=menus.map(m=>m.id);
   const{data:items}=await DB.from('week_menu_items').select('menu_id,recipe_id,day_of_week').in('menu_id',menuIds);
-  S.receptWeek={};S.receptDag={};
+  S.receptWeek={};S.receptDagen={};
   (items||[]).forEach(i=>{
     const ws=weekMap[i.menu_id];S.receptWeek[i.recipe_id]=ws;
-    if(i.day_of_week!=null){const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);S.receptDag[i.recipe_id]=d.toISOString().split('T')[0];}
+    if(i.day_of_week!=null){
+      const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
+      const ds=d.toISOString().split('T')[0];
+      if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
+      if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
+    }
   });
 }
 async function ensureMenuVoorWeek(weekStart){
@@ -680,25 +746,82 @@ function formatDagKort(dateStr){
   const datum=d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
   return`${dag} ${datum}`;
 }
-function openCalPicker(id){
-  if(S.calPicker&&S.calPicker.id===id){S.calPicker=null;rIP();return;}
-  const gekozen=S.receptDag[id];
-  const d=gekozen?new Date(gekozen+'T00:00:00'):new Date();
-  S.calPicker={id,jaar:d.getFullYear(),maand:d.getMonth()};
-  rIP();
+function dagWeekStart(dateStr){
+  const p=dateStr.split('-');
+  const d=new Date(+p[0],+p[1]-1,+p[2]);
+  const sun=new Date(+p[0],+p[1]-1,+p[2]-d.getDay());
+  return`${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`;
 }
+
+// ── Data layer ────────────────────────────────────────────────────────────────
+function getDatesForRecipe(recipeId){return S.receptDagen[recipeId]||[];}
+function getRecipesForWeek(weekStartStr){
+  const result={0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
+  Object.entries(S.receptDagen).forEach(([rid,dates])=>{
+    dates.forEach(ds=>{
+      if(dagWeekStart(ds)===weekStartStr){
+        const r=S.recepten.find(x=>x.id===rid)||S.menuReceptenMap[rid];
+        if(r)result[new Date(ds+'T00:00:00').getDay()].push({...r,geplandeDatum:ds});
+      }
+    });
+  });
+  return result;
+}
+async function linkRecipeToDate(recipeId,dateStr){
+  const arr=getDatesForRecipe(recipeId);
+  if(arr.includes(dateStr))return;
+  S.receptDagen[recipeId]=[...arr,dateStr].sort();
+  const ws=dagWeekStart(dateStr);
+  S.receptWeek[recipeId]=S.receptWeek[recipeId]||ws;
+  if(ws===S.actieveWeek&&!S.geselecteerd.includes(recipeId))S.geselecteerd.push(recipeId);
+  rIP();renderDpkGekozen();
+  if(!S.gebruiker)return;
+  const mid=await ensureMenuVoorWeek(ws);
+  if(!mid)return;
+  const sv=S.weekPers[recipeId]||S.recepten.find(r=>r.id===recipeId)?.personen||4;
+  const dow=new Date(dateStr+'T00:00:00').getDay();
+  await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',recipeId).eq('day_of_week',dow);
+  await DB.from('week_menu_items').insert({menu_id:mid,recipe_id:recipeId,day_of_week:dow,servings:sv});
+}
+async function unlinkRecipeFromDate(recipeId,dateStr){
+  const nieuw=(S.receptDagen[recipeId]||[]).filter(d=>d!==dateStr);
+  if(!nieuw.length)delete S.receptDagen[recipeId];else S.receptDagen[recipeId]=nieuw;
+  const ws=dagWeekStart(dateStr);
+  const nogInWeek=(S.receptDagen[recipeId]||[]).some(d=>dagWeekStart(d)===ws);
+  if(!nogInWeek){
+    if(ws===S.actieveWeek)S.geselecteerd=S.geselecteerd.filter(x=>x!==recipeId);
+    if(!(S.receptDagen[recipeId]||[]).length)delete S.receptWeek[recipeId];
+  }
+  rIP();renderDpkGekozen();
+  if(!S.gebruiker)return;
+  const{data:menu}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',ws).maybeSingle();
+  if(!menu)return;
+  const dow=new Date(dateStr+'T00:00:00').getDay();
+  await DB.from('week_menu_items').delete().eq('menu_id',menu.id).eq('recipe_id',recipeId).eq('day_of_week',dow);
+}
+
+// ── Datumkiezer modal ─────────────────────────────────────────────────────────
+function openCalPicker(id){
+  const dates=getDatesForRecipe(id);
+  const d=dates.length?new Date(dates[dates.length-1]+'T00:00:00'):new Date();
+  S.calPicker={id,jaar:d.getFullYear(),maand:d.getMonth()};
+  renderDpkCal();renderDpkGekozen();
+  document.getElementById('dpk').classList.add('open');
+}
+function sluitDpk(){document.getElementById('dpk').classList.remove('open');S.calPicker=null;rIP();}
 function calNav(delta){
   if(!S.calPicker)return;
   let m=S.calPicker.maand+delta,j=S.calPicker.jaar;
   if(m<0){m=11;j--;}else if(m>11){m=0;j++;}
-  S.calPicker={...S.calPicker,maand:m,jaar:j};rIP();
+  S.calPicker={...S.calPicker,maand:m,jaar:j};
+  renderDpkCal();
 }
-function buildCalendar(recipeId){
-  if(!S.calPicker||S.calPicker.id!==recipeId)return'';
-  const{jaar,maand}=S.calPicker;
+function renderDpkCal(){
+  if(!S.calPicker){return;}
+  const{id,jaar,maand}=S.calPicker;
   const mnamen=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
   const vandaag=new Date();vandaag.setHours(0,0,0,0);
-  const gekozen=S.receptDag[recipeId];
+  const gekozen=new Set(getDatesForRecipe(id));
   const startKolom=new Date(jaar,maand,1).getDay();
   const aantalDagen=new Date(jaar,maand+1,0).getDate();
   const hdrs=['Zo','Ma','Di','Wo','Do','Vr','Za'].map(n=>`<div class="cal-dag-hdr">${n}</div>`).join('');
@@ -708,58 +831,61 @@ function buildCalendar(recipeId){
     const ds=`${jaar}-${String(maand+1).padStart(2,'0')}-${String(dag).padStart(2,'0')}`;
     const dt=new Date(jaar,maand,dag);dt.setHours(0,0,0,0);
     const isV=dt.getTime()===vandaag.getTime();
-    const isG=ds===gekozen;
-    cellen+=`<button class="cal-dag${isV?' vandaag':''}${isG?' gekozen':''}" onclick="assignToDate('${recipeId}','${ds}')">${dag}</button>`;
+    const isG=gekozen.has(ds);
+    cellen+=`<button class="cal-dag${isV?' vandaag':''}${isG?' gekozen':''}" onclick="toggleDatum('${ds}')">${dag}</button>`;
   }
-  return`<div class="rcard-cal">
-    <div class="cal-header">
-      <button class="cal-nav" onclick="calNav(-1)">‹</button>
-      <span class="cal-titel">${mnamen[maand]} ${jaar}</span>
-      <button class="cal-nav" onclick="calNav(1)">›</button>
-    </div>
-    <div class="cal-grid">${hdrs}${cellen}</div>
-    <button class="wp-cancel" onclick="S.calPicker=null;rIP()">Annuleren</button>
-  </div>`;
+  const el=document.getElementById('dpk-cal');
+  if(el)el.innerHTML=`<div class="cal-header">
+    <button class="cal-nav" onclick="calNav(-1)">‹</button>
+    <span class="cal-titel">${mnamen[maand]} ${jaar}</span>
+    <button class="cal-nav" onclick="calNav(1)">›</button>
+  </div>
+  <div class="cal-grid">${hdrs}${cellen}</div>`;
 }
-async function assignToDate(id,dateStr){
-  const d=new Date(dateStr+'T00:00:00');
-  const sun=new Date(d);sun.setDate(d.getDate()-d.getDay());sun.setHours(0,0,0,0);
-  const weekStart=sun.toISOString().split('T')[0];
-  S.calPicker=null;
-  const prevDag=S.receptDag[id];
-  const prevWeek=S.receptWeek[id];
-  if(prevDag===dateStr){
-    delete S.receptDag[id];delete S.receptWeek[id];rIP();
-    if(prevWeek===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);slaWeekmenuOp();}
-    else if(prevWeek){const mid=await ensureMenuVoorWeek(prevWeek);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
-    return;
-  }
-  S.receptDag[id]=dateStr;
-  if(prevWeek===weekStart){
-    rIP();
-    if(weekStart===S.actieveWeek){slaWeekmenuOp();}
-    else{const mid=await ensureMenuVoorWeek(weekStart);if(mid){const sv=S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;await DB.from('week_menu_items').upsert({menu_id:mid,recipe_id:id,servings:sv,day_of_week:d.getDay()},{onConflict:'menu_id,recipe_id'});}}
-    return;
-  }
-  S.receptWeek[id]=weekStart;rIP();
-  if(prevWeek){
-    if(prevWeek===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);}
-    else{const mid=await ensureMenuVoorWeek(prevWeek);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
-  }
-  if(weekStart===S.actieveWeek){
-    if(!S.geselecteerd.includes(id))S.geselecteerd.push(id);
-    slaWeekmenuOp();
-  } else {
-    const mid=await ensureMenuVoorWeek(weekStart);
-    if(mid){const sv=S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;await DB.from('week_menu_items').upsert({menu_id:mid,recipe_id:id,servings:sv,day_of_week:d.getDay()},{onConflict:'menu_id,recipe_id'});}
-    if(prevWeek===S.actieveWeek)slaWeekmenuOp();
-  }
+function renderDpkGekozen(){
+  if(!S.calPicker)return;
+  const id=S.calPicker.id;
+  const dates=getDatesForRecipe(id);
+  const el=document.getElementById('dpk-gekozen');
+  if(!el)return;
+  el.innerHTML=dates.length
+    ?dates.map(ds=>`<span class="datum-pill">${formatDagKort(ds)}<button onclick="toggleDatum('${ds}')" title="Verwijderen">✕</button></span>`).join('')
+    :`<span style="font-size:12px;color:var(--text3)">Nog geen datum geselecteerd</span>`;
+}
+async function toggleDatum(dateStr){
+  if(!S.calPicker)return;
+  const id=S.calPicker.id;
+  if(getDatesForRecipe(id).includes(dateStr))await unlinkRecipeFromDate(id,dateStr);
+  else await linkRecipeToDate(id,dateStr);
+  renderDpkCal();renderDpkGekozen();
+}
+function buildCalendar(recipeId){return'';}
+
+// ── Recept-picker voor dag in weekmenu ────────────────────────────────────────
+function openRpk(dateStr){
+  S.dagPickerDatum=dateStr;
+  document.getElementById('rpk-titel').textContent=`Recept voor ${formatDagKort(dateStr)}`;
+  const al=new Set(getRecipesForWeek(dagWeekStart(dateStr))[new Date(dateStr+'T00:00:00').getDay()].map(r=>r.id));
+  const lijst=S.recepten.filter(r=>!r.id.startsWith('demo-'));
+  document.getElementById('rpk-lijst').innerHTML=lijst.length===0
+    ?'<div class="hint">Geen recepten gevonden</div>'
+    :lijst.map(r=>`<div class="dag-recept-item">
+        <div class="dag-recept-naam">${h(r.titel)}</div>
+        <button class="btn ${al.has(r.id)?'btn-ghost':'btn-accent'}" onclick="kiesReceptVoorDag('${r.id}')" style="white-space:nowrap;font-size:12px;padding:5px 10px">${al.has(r.id)?'Al gepland':'+ Toevoegen'}</button>
+      </div>`).join('');
+  document.getElementById('rpk').classList.add('open');
+}
+function sluitRpk(){document.getElementById('rpk').classList.remove('open');S.dagPickerDatum=null;}
+async function kiesReceptVoorDag(recipeId){
+  if(!S.dagPickerDatum)return;
+  await linkRecipeToDate(recipeId,S.dagPickerDatum);
+  sluitRpk();rIP();
 }
 async function assignToWeek(id,weekStart){
   const prev=S.receptWeek[id];
   S.weekPickerFor=null;
   if(prev===weekStart){
-    delete S.receptWeek[id];delete S.receptDag[id];rIP();
+    delete S.receptWeek[id];delete S.receptDagen[id];rIP();
     if(prev===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);slaWeekmenuOp();}
     else{const mid=await ensureMenuVoorWeek(prev);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
     return;
@@ -798,11 +924,17 @@ async function slaWeekmenuOp(){
     S.menuId=menuId;
   }
   await DB.from('week_menu_items').delete().eq('menu_id',menuId);
-  const teInserten=S.geselecteerd.filter(rid=>!rid.startsWith('demo-'));
-  if(teInserten.length>0){
-    const{error}=await DB.from('week_menu_items').insert(
-      teInserten.map(rid=>({menu_id:menuId,recipe_id:rid,day_of_week:S.receptDag[rid]?new Date(S.receptDag[rid]+'T00:00:00').getDay():0,servings:S.weekPers[rid]||null}))
-    );
+  const rijen=[];
+  Object.entries(S.receptDagen).forEach(([rid,dates])=>{
+    if(rid.startsWith('demo-'))return;
+    dates.forEach(ds=>{
+      if(dagWeekStart(ds)===S.actieveWeek){
+        rijen.push({menu_id:menuId,recipe_id:rid,day_of_week:new Date(ds+'T00:00:00').getDay(),servings:S.weekPers[rid]||null});
+      }
+    });
+  });
+  if(rijen.length>0){
+    const{error}=await DB.from('week_menu_items').insert(rijen);
     if(error)console.error('Weekmenu opslaan mislukt:',error.message);
   }
 }
@@ -1339,19 +1471,22 @@ function buildCard(r,opts={}){
       <h4>Ingrediënten${stepper?' — '+p+' personen':''}</h4><ul>${ings}</ul>
       <h4>Bereiding</h4><ol>${stps}</ol>
       ${r.bron?`<a href="${h(r.bron)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent)">Origineel recept →</a>`:''}
+      ${showSel?`<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <button class="btn btn-dark" onclick="openCalPicker('${r.id}')" style="width:100%;margin-bottom:8px">📅 Selecteer voor weekmenu</button>
+        ${getDatesForRecipe(r.id).length>0
+          ?`<div style="display:flex;flex-wrap:wrap;gap:5px">${getDatesForRecipe(r.id).sort().map(ds=>`<span class="datum-pill">${formatDagKort(ds)}<button onclick="unlinkRecipeFromDate('${r.id}','${ds}')" title="Verwijderen">✕</button></span>`).join('')}</div>`
+          :`<span style="font-size:12px;color:var(--text3)">Nog niet ingepland</span>`}
+      </div>`:''}
     </div>
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
-      ${showSel?S.receptDag[r.id]
-        ?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">${formatDagKort(S.receptDag[r.id])}</button>`
-        :`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Kies voor dag</button>`:''}
+      ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Kies voor dag</button>`;})():''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
       ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
-    ${showSel?buildCalendar(r.id):''}
   </div>`;
 }
 function tD(cid){const d=document.getElementById('d'+cid),t=d.previousElementSibling;d.classList.toggle('open');t.querySelector('.arr').textContent=d.classList.contains('open')?'▲':'▼';}
@@ -1466,8 +1601,38 @@ function renderZoeken(){
 }
 
 function renderWeekmenu(){
-  const sel=S.recepten.filter(r=>S.geselecteerd.includes(r.id));
   const aw=S.actieveWeek||getMaandag();
+  const dagNamen=['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
+  const perDag=getRecipesForWeek(aw);
+  const totaal=Object.values(perDag).reduce((s,a)=>s+a.length,0);
+  const dagRijen=dagNamen.map((naam,i)=>{
+    const d=new Date(aw+'T00:00:00');d.setDate(d.getDate()+i);
+    const ds=d.toISOString().split('T')[0];
+    const recepten=perDag[i]||[];
+    const receptHTML=recepten.map(r=>`<div class="dag-recept-item">
+        <div>
+          <div class="dag-recept-naam">${h(r.titel)}</div>
+          <div class="dag-recept-meta">${r.keuken?h(r.keuken)+' · ':''}${gP(r.id)} pers.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <div class="stepper" style="zoom:.8"><button onclick="sP('${r.id}',${gP(r.id)-1})">−</button><span>${gP(r.id)}</span><button onclick="sP('${r.id}',${gP(r.id)+1})">+</button></div>
+          <button class="dag-recept-del" onclick="unlinkRecipeFromDate('${r.id}','${ds}')" title="Verwijderen">✕</button>
+        </div>
+      </div>`).join('');
+    return`<div class="dag-rij">
+      <div class="dag-rij-hdr">
+        <span class="dag-rij-naam">${naam}</span>
+        <span class="dag-rij-datum">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}</span>
+      </div>
+      <div class="dag-rij-body">
+        ${receptHTML}
+        <button class="dag-add" onclick="openRpk('${ds}')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Voeg recept toe
+        </button>
+      </div>
+    </div>`;
+  }).join('');
   return`
     <div class="week-nav">
       <button class="btn btn-ghost" onclick="verschuifWeek(-1)" title="Vorige week">‹</button>
@@ -1477,17 +1642,15 @@ function renderWeekmenu(){
       </div>
       <button class="btn btn-ghost" onclick="verschuifWeek(1)" title="Volgende week">›</button>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;margin-bottom:12px;box-shadow:var(--shadow)">
-      <span style="flex:1;font-size:13px;color:var(--text);font-weight:500">Weekmenu delen met volgers</span>
+    <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;margin-bottom:14px;box-shadow:var(--shadow)">
+      <span style="flex:1;font-size:13px;color:var(--text);font-weight:500">Weekmenu delen</span>
       <span style="font-size:11px;color:var(--text3)">${S.weekMenuPubliek?'Zichtbaar in feeds':'Alleen voor jou'}</span>
       <button class="btn ${S.weekMenuPubliek?'btn-accent':'btn-ghost'}" onclick="toggleWeekMenuPubliek()">${S.weekMenuPubliek?'🌐 Publiek':'🔒 Privé'}</button>
     </div>
-    <div class="box-info" style="background:var(--accent-bg)">Selecteer recepten via het tabblad "Recepten". Pas hier het aantal personen per recept aan met de + en − knoppen.</div>
-    ${sel.length===0?`<div class="empty"><span>📅</span>Nog geen recepten gekozen.<br><br><button class="btn btn-dark" onclick="setTab('recepten')">Ga naar Recepten →</button></div>`:`
-      <div class="cards-grid">${sel.map(r=>buildCard(r,{showSel:true,showEdit:true,stepper:true,pers:gP(r.id)})).join('')}</div>
-      <button class="btn btn-dark btn-w" style="margin-top:14px" onclick="maakBoodschappenlijst()">Boodschappenlijst maken →</button>
-      <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`}`;
-}
+    ${dagRijen}
+    ${totaal>0?`<button class="btn btn-dark btn-w" style="margin-top:14px" onclick="maakBoodschappenlijst()">Boodschappenlijst maken →</button>
+    <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`:''}`;}
+
 
 function renderBoodschappen(){
   if(S.shopItems.length===0&&S.geselecteerd.length>0)bouwShop();
