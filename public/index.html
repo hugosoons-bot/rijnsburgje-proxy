@@ -1166,7 +1166,13 @@ function renderRecepten(){
   const kF=['Alle',...KEUKEN].map(k=>`<button class="fb${S.fK===k?' on':''}" onclick="S.fK='${k}';rIP()">${k}</button>`).join('');
   const cF=['Alle',...CATS].map(c=>`<button class="fb${S.fC===c?' on':''}" onclick="S.fC='${h(c)}';rIP()">${h(c)}</button>`).join('');
   return`
-    <div style="margin-bottom:14px"><input class="inp" style="width:100%" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+      <input class="inp" style="flex:1" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()">
+      <button class="btn btn-accent" onclick="setTab('zoeken')" style="white-space:nowrap;flex-shrink:0" title="Recept toevoegen">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Toevoegen
+      </button>
+    </div>
     <div class="filter-wrap">
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
