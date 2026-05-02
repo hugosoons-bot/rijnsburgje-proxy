@@ -104,6 +104,14 @@ a{color:var(--accent);text-decoration:none}
 .rcard-detail li{font-size:13px;color:var(--text);margin-bottom:5px;line-height:1.55}
 .rcard-actions{padding:10px 14px 14px;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;border-top:1px solid var(--border);-webkit-overflow-scrolling:touch}
 .rcard-actions .btn{padding:7px 10px;font-size:13px;white-space:nowrap;flex-shrink:0}
+.rcard-week-picker{padding:10px 14px 14px;border-top:1px solid var(--border);background:var(--bg)}
+.wp-opt{width:100%;text-align:left;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:5px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-family:inherit;font-size:13px}
+.wp-opt:hover{background:var(--surface2);border-color:var(--accent)}
+.wp-opt.wp-actief{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:700}
+.wp-wn{font-weight:700}
+.wp-bereik{font-size:11px;color:var(--text3)}
+.wp-opt.wp-actief .wp-bereik{color:var(--accent)}
+.wp-cancel{background:none;border:none;padding:5px 0 0;font-size:12px;color:var(--text3);cursor:pointer;width:100%;text-align:center;font-family:inherit}
 
 /* ── Buttons ── */
 .btn{border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s;cursor:pointer;letter-spacing:.01em;display:inline-flex;align-items:center;gap:5px;justify-content:center;min-height:40px}
@@ -363,7 +371,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
-  actieveWeek:null,
+  actieveWeek:null,receptWeek:{},weekPickerFor:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
@@ -608,12 +616,66 @@ async function wisselWeek(nieuweWeek){
 async function laadWeekmenu(){
   if(!S.gebruiker)return;
   const{data:menu}=await DB.from('week_menus').select('id,is_public').eq('user_id',S.gebruiker.id).eq('week_start',S.actieveWeek).maybeSingle();
-  if(!menu){S.menuId=null;S.weekMenuPubliek=false;S.geselecteerd=[];S.weekPers={};return;}
-  S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
-  const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
-  S.geselecteerd=(items||[]).map(i=>i.recipe_id);
-  S.weekPers={};
-  (items||[]).forEach(i=>{if(i.servings)S.weekPers[i.recipe_id]=i.servings;});
+  if(!menu){S.menuId=null;S.weekMenuPubliek=false;S.geselecteerd=[];S.weekPers={};}
+  else{
+    S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
+    const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
+    S.geselecteerd=(items||[]).map(i=>i.recipe_id);
+    S.weekPers={};
+    (items||[]).forEach(i=>{if(i.servings)S.weekPers[i.recipe_id]=i.servings;});
+  }
+  await laadAlleWeekMenus();
+}
+async function laadAlleWeekMenus(){
+  if(!S.gebruiker)return;
+  const basis=new Date(getMaandag()+'T00:00:00');
+  const weken=[];
+  for(let i=0;i<5;i++){const d=new Date(basis);d.setDate(d.getDate()+i*7);weken.push(d.toISOString().split('T')[0]);}
+  const{data:menus}=await DB.from('week_menus').select('id,week_start').eq('user_id',S.gebruiker.id).in('week_start',weken);
+  if(!menus||!menus.length){S.receptWeek={};return;}
+  const weekMap={};menus.forEach(m=>weekMap[m.id]=m.week_start);
+  const menuIds=menus.map(m=>m.id);
+  const{data:items}=await DB.from('week_menu_items').select('menu_id,recipe_id').in('menu_id',menuIds);
+  S.receptWeek={};
+  (items||[]).forEach(i=>{S.receptWeek[i.recipe_id]=weekMap[i.menu_id];});
+}
+async function ensureMenuVoorWeek(weekStart){
+  if(!S.gebruiker)return null;
+  const{data:bestaand}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',weekStart).maybeSingle();
+  if(bestaand)return bestaand.id;
+  const{data:nieuw,error}=await DB.from('week_menus').insert({user_id:S.gebruiker.id,week_start:weekStart,is_public:false}).select('id').single();
+  if(error){console.error(error.message);return null;}
+  return nieuw.id;
+}
+function openWeekPicker(id){S.weekPickerFor=S.weekPickerFor===id?null:id;rIP();}
+async function assignToWeek(id,weekStart){
+  const prev=S.receptWeek[id];
+  S.weekPickerFor=null;
+  if(prev===weekStart){
+    delete S.receptWeek[id];rIP();
+    if(prev===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);slaWeekmenuOp();}
+    else{const mid=await ensureMenuVoorWeek(prev);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
+    return;
+  }
+  if(prev){
+    if(prev===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);}
+    else{const mid=await ensureMenuVoorWeek(prev);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
+  }
+  S.receptWeek[id]=weekStart;rIP();
+  if(weekStart===S.actieveWeek){
+    if(!S.geselecteerd.includes(id))S.geselecteerd.push(id);
+    slaWeekmenuOp();
+  } else {
+    const mid=await ensureMenuVoorWeek(weekStart);
+    if(mid){const sv=S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;await DB.from('week_menu_items').upsert({menu_id:mid,recipe_id:id,servings:sv,day_of_week:0},{onConflict:'menu_id,recipe_id'});}
+    if(prev===S.actieveWeek)slaWeekmenuOp();
+  }
+}
+function formatWeekOptieKort(weekStart){
+  const d=new Date(weekStart+'T00:00:00');
+  const z=new Date(d);z.setDate(d.getDate()+6);
+  const fmt=dt=>dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+  return`${fmt(d)} – ${fmt(z)}`;
 }
 async function slaWeekmenuOp(){
   if(!S.gebruiker)return;
@@ -1172,13 +1234,24 @@ function buildCard(r,opts={}){
     </div>
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
-      ${showSel?`<button class="btn ${sel?'btn-ghost':'btn-dark'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
+      ${showSel?S.receptWeek[r.id]
+        ?`<button class="btn btn-accent" onclick="openWeekPicker('${r.id}')">Week ${weekNummer(S.receptWeek[r.id])}</button>`
+        :`<button class="btn btn-dark" onclick="openWeekPicker('${r.id}')">Kies voor week</button>`:''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
       ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
+    ${showSel&&S.weekPickerFor===r.id?`<div class="rcard-week-picker">
+      ${[0,1,2,3,4].map(i=>{
+        const d=new Date(getMaandag()+'T00:00:00');d.setDate(d.getDate()+i*7);
+        const ws=d.toISOString().split('T')[0];
+        const gekozen=S.receptWeek[r.id]===ws;
+        return`<button class="wp-opt${gekozen?' wp-actief':''}" onclick="assignToWeek('${r.id}','${ws}')"><span class="wp-wn">Week ${weekNummer(ws)}</span><span class="wp-bereik">${formatWeekOptieKort(ws)}${gekozen?' ✓':''}</span></button>`;
+      }).join('')}
+      <button class="wp-cancel" onclick="S.weekPickerFor=null;rIP()">Annuleren</button>
+    </div>`:''}
   </div>`;
 }
 function tD(cid){const d=document.getElementById('d'+cid),t=d.previousElementSibling;d.classList.toggle('open');t.querySelector('.arr').textContent=d.classList.contains('open')?'▲':'▼';}
