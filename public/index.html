@@ -321,11 +321,11 @@ const DEMO=[
   {id:"demo-1",titel:"Pasta Carbonara",omschrijving:"Klassieke Romeinse pasta met ei, pecorino en guanciale. Romig zonder room.",personen:4,
    ingredienten:[{naam:"spaghetti",hoeveelheid:400,eenheid:"g"},{naam:"guanciale of pancetta",hoeveelheid:150,eenheid:"g"},{naam:"eieren",hoeveelheid:4,eenheid:"st"},{naam:"pecorino romano",hoeveelheid:80,eenheid:"g"},{naam:"zwarte peper",hoeveelheid:1,eenheid:"tl"}],
    stappen:["Kook de pasta al dente in ruim gezouten water.","Bak de guanciale knapperig in een droge koekenpan.","Klop eieren los met pecorino en veel zwarte peper.","Voeg pasta-kookvocht toe aan het eimengsel.","Meng buiten het vuur met het eimengsel en guanciale.","Serveer direct."],
-   keuken:"Italiaans",categorie:"Doordeweeks top",tags:[],notities:"Niet te veel vuur, anders stolt het ei.",bron:"https://www.seriouseats.com/the-best-carbonara",rating:5,opgeslagen:true,datum:"2024-01-15"},
+   keuken:"Italiaans",categorie:["Doordeweeks top"],tags:[],notities:"Niet te veel vuur, anders stolt het ei.",bron:"https://www.seriouseats.com/the-best-carbonara",rating:5,opgeslagen:true,datum:"2024-01-15"},
   {id:"demo-2",titel:"Dal Makhani",omschrijving:"Rijke romige linzensoep met zwarte linzen, tomaat en boter. Comfort food op z'n best.",personen:4,
    ingredienten:[{naam:"zwarte linzen",hoeveelheid:250,eenheid:"g"},{naam:"kidneybonen (blik)",hoeveelheid:200,eenheid:"g"},{naam:"tomaten (blik)",hoeveelheid:400,eenheid:"g"},{naam:"boter",hoeveelheid:60,eenheid:"g"},{naam:"slagroom",hoeveelheid:100,eenheid:"ml"},{naam:"ui",hoeveelheid:1,eenheid:"st"},{naam:"knoflook",hoeveelheid:4,eenheid:"teentjes"},{naam:"garam masala",hoeveelheid:2,eenheid:"tl"}],
    stappen:["Week de linzen een nacht en kook ze gaar.","Fruit ui en knoflook in boter.","Voeg specerijen toe en bak 2 min.","Voeg tomaten toe, 15 min sudderen.","Meng met linzen, 30 min pruttelen.","Slagroom erdoor."],
-   keuken:"Indiaas",categorie:"Comfort food",tags:[],notities:"Heerlijk de dag erna ook.",bron:"https://www.bonappetit.com/recipe/dal-makhani",rating:4,opgeslagen:true,datum:"2024-01-20"}
+   keuken:"Indiaas",categorie:["Comfort food"],tags:[],notities:"Heerlijk de dag erna ook.",bron:"https://www.bonappetit.com/recipe/dal-makhani",rating:4,opgeslagen:true,datum:"2024-01-20"}
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -340,7 +340,7 @@ let S={
   actieveWeek:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
-  editId:null,mK:'',mC:'',mTags:[],mIngs:[],mStps:[],
+  editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
@@ -353,13 +353,14 @@ function sav(){
   try{localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}
 }
 
+function parseCats(v){if(!v)return[];if(Array.isArray(v))return v;try{const p=JSON.parse(v);return Array.isArray(p)?p:[p].filter(Boolean);}catch{return[v];}}
 function toSB(r){
   return{
     id:r.id,user_id:S.gebruiker?.id,
     title:r.titel,description:r.omschrijving||'',
     image_url:r.afbeelding&&!r.afbeelding.startsWith('blob:')?r.afbeelding:null,source_url:r.bron||null,
     ingredients:r.ingredienten||[],instructions:r.stappen||[],
-    cuisine:r.keuken||null,category:r.categorie||null,
+    cuisine:r.keuken||null,category:Array.isArray(r.categorie)?JSON.stringify(r.categorie):(r.categorie?JSON.stringify([r.categorie]):null),
     tags:r.tags||[],servings:r.personen||4,
     rating:r.rating||null,notes:r.notities||null,
     is_public:r.publiek||false,
@@ -372,7 +373,7 @@ function fromSB(row){
     id:row.id,titel:row.title,omschrijving:row.description||'',
     afbeelding:row.image_url||'',bron:row.source_url||'',
     ingredienten:row.ingredients||[],stappen:row.instructions||[],
-    keuken:row.cuisine||'',categorie:row.category||'',
+    keuken:row.cuisine||'',categorie:parseCats(row.category),
     tags:row.tags||[],personen:row.servings||4,
     rating:row.rating||0,notities:row.notes||'',
     tijdBereiding:row.prep_time||0,tijdWacht:row.wait_time||0,
@@ -698,7 +699,7 @@ function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));render(
 function openEdit(id){
   const r=S.recepten.find(x=>x.id===id);if(!r)return;
   S.editId=id;
-  S.mK=r.keuken||'';S.mC=r.categorie||'';
+  S.mK=r.keuken||'';S.mC=parseCats(r.categorie);
   S.mTags=[...(r.tags||[])];
   S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
   S.mStps=[...(r.stappen||[])];
@@ -711,12 +712,12 @@ function openEdit(id){
   document.getElementById('m-tw').value=r.tijdWacht||'';
   document.getElementById('m-ti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
-  document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC===c?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
+  document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC.includes(c)?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
   rMT();rMIngs();rMStps();
   document.getElementById('mov').classList.add('open');
 }
 function tMK(k){S.mK=S.mK===k?'':k;document.querySelectorAll('#m-k .cat-btn').forEach(b=>b.classList.toggle('ak',b.textContent===S.mK));}
-function tMC(c){S.mC=S.mC===c?'':c;document.querySelectorAll('#m-c .cat-btn').forEach(b=>b.classList.toggle('ac',b.textContent===S.mC));}
+function tMC(c){const i=S.mC.indexOf(c);if(i>=0)S.mC.splice(i,1);else S.mC.push(c);document.querySelectorAll('#m-c .cat-btn').forEach(b=>b.classList.toggle('ac',S.mC.includes(b.textContent)));}
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
 function rmMT(i){S.mTags.splice(i,1);rMT();}
 function addMTag(){const inp=document.getElementById('m-ti'),t=inp.value.trim();if(t&&!S.mTags.includes(t)){S.mTags.push(t);rMT();}inp.value='';}
@@ -849,7 +850,7 @@ async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
 function normaliseer(parsed,fallbackBron){
   return parsed.map(r=>({...r,
     id:r.id||'r'+Date.now()+Math.random().toString(36).slice(2),
-    tags:r.tags||[],keuken:r.keuken||'',categorie:r.categorie||'',
+    tags:r.tags||[],keuken:r.keuken||'',categorie:parseCats(r.categorie),
     afbeelding:r.afbeelding||'',bron:r.bron||fallbackBron||'',
     tijdBereiding:parseInt(r.tijdBereiding)||0,
     tijdWacht:parseInt(r.tijdWacht)||0,
@@ -1100,7 +1101,7 @@ async function addExtra(){
 function buildLabels(r){
   let s='<div class="rcard-labels">';
   if(r.keuken)s+=`<span class="lbl lbl-k">${h(r.keuken)}</span>`;
-  if(r.categorie){const c=r.categorie==='Niet nog een keer'?'lbl-n':'lbl-c';s+=`<span class="lbl ${c}">${h(r.categorie)}</span>`;}
+  parseCats(r.categorie).forEach(c=>{const cls=c==='Niet nog een keer'?'lbl-n':'lbl-c';s+=`<span class="lbl ${cls}">${h(c)}</span>`;});
   (r.tags||[]).forEach(t=>s+=`<span class="lbl lbl-t">${h(t)}</span>`);
   return s+'</div>';
 }
@@ -1155,9 +1156,10 @@ function tD(cid){const d=document.getElementById('d'+cid),t=d.previousElementSib
 function renderRecepten(){
   const zt=S.zoekterm.toLowerCase();
   const gef=S.recepten.filter(r=>{
-    if(S.hideNNEK&&r.categorie==='Niet nog een keer')return false;
+    const rc=parseCats(r.categorie);
+    if(S.hideNNEK&&rc.includes('Niet nog een keer'))return false;
     if(S.fK!=='Alle'&&r.keuken!==S.fK)return false;
-    if(S.fC!=='Alle'&&r.categorie!==S.fC)return false;
+    if(S.fC!=='Alle'&&!rc.includes(S.fC))return false;
     if(zt&&!r.titel.toLowerCase().includes(zt)&&!(r.tags||[]).some(t=>t.toLowerCase().includes(zt)))return false;
     return true;
   });
