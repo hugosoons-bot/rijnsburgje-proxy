@@ -53,6 +53,16 @@ a{color:var(--accent);text-decoration:none}
 
 /* ── Recipe cards ── */
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:20px}
+
+/* Feed-modus: één kolom, gecentreerd, groot beeld */
+.feed-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto;gap:28px}
+.feed-grid .rcard-img{height:300px}
+.feed-grid .rcard{box-shadow:var(--shadow-lg)}
+.feed-grid .rcard:hover{transform:none;box-shadow:var(--shadow-lg)}
+.feed-grid .rcard-img-labels{display:flex;position:absolute;bottom:0;left:0;right:0;padding:48px 14px 12px;background:linear-gradient(transparent,rgba(0,0,0,.55));gap:5px;flex-wrap:wrap}
+.feed-grid .rcard-img-labels .lbl{background:rgba(255,255,255,.18);backdrop-filter:blur(6px);color:var(--color-bg);border-color:rgba(255,255,255,.3)}
+.feed-grid .rcard-labels{display:none}
+
 .rcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow);transition:box-shadow .2s,transform .2s;position:relative;cursor:pointer}
 .rcard:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px)}
 .rcard.sel{border:2px solid var(--accent);box-shadow:0 4px 24px rgba(0,0,0,.14)}
@@ -1098,6 +1108,13 @@ async function addExtra(){
 }
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
+function buildLabelSpans(r){
+  let s='';
+  if(r.keuken)s+=`<span class="lbl lbl-k">${h(r.keuken)}</span>`;
+  parseCats(r.categorie).forEach(c=>{const cls=c==='Niet nog een keer'?'lbl-n':'lbl-c';s+=`<span class="lbl ${cls}">${h(c)}</span>`;});
+  (r.tags||[]).forEach(t=>s+=`<span class="lbl lbl-t">${h(t)}</span>`);
+  return s;
+}
 function buildLabels(r){
   let s='<div class="rcard-labels">';
   if(r.keuken)s+=`<span class="lbl lbl-k">${h(r.keuken)}</span>`;
@@ -1119,7 +1136,9 @@ function buildCard(r,opts={}){
     <div class="rcard-img">${r.afbeelding
       ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:${r.afbeelding.startsWith('blob:')?'contain':'cover'};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
-      ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}</div>
+      ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}
+      <div class="rcard-img-labels">${buildLabelSpans(r)}</div>
+    </div>
     <div class="rcard-body">
       ${buildLabels(r)}
       <div class="rcard-title">${h(r.titel)}</div>
@@ -1182,7 +1201,7 @@ function renderRecepten(){
       ?`<div class="empty"><span>👨‍🍳</span>Nog geen recepten opgeslagen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
       :gef.length===0
         ?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>'
-        :`<div class="cards-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
+        :`<div class="cards-grid feed-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
 function renderZoeken(){
