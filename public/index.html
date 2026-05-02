@@ -206,7 +206,9 @@ textarea.inp{resize:vertical}
 /* Modal */
 #mov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-end;justify-content:center}
 #mov.open{display:flex}
-#mbox{background:var(--surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:24px 20px 40px;width:100%;max-width:800px;box-shadow:var(--shadow-lg);max-height:88vh;overflow-y:auto}
+#mbox{background:var(--surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:800px;box-shadow:var(--shadow-lg);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+#mbox-scroll{flex:1;overflow-y:auto;padding:24px 20px 8px}
+#mbox-footer{flex-shrink:0;padding:12px 20px;background:var(--surface);border-top:1px solid var(--border)}
 .cat-btn{padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);color:var(--text2);font-size:13px;font-weight:500;margin:0 5px 7px 0;cursor:pointer;transition:all .15s}
 .cat-btn:hover{border-color:var(--accent);color:var(--accent)}
 .cat-btn.ak{background:var(--gold-bg);color:var(--gold);border-color:var(--border)}
@@ -249,54 +251,58 @@ textarea.inp{resize:vertical}
 <!-- Edit modal -->
 <div id="mov" onclick="closeOvl(event)">
   <div id="mbox">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <h2 style="font-size:17px;color:var(--text)">Recept bewerken</h2>
-      <button onclick="sluitModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);line-height:1">✕</button>
-    </div>
-    <span class="sec-label">Titel</span>
-    <input id="m-titel" class="inp" placeholder="Naam van het recept" style="margin-bottom:12px">
-    <span class="sec-label">Omschrijving</span>
-    <input id="m-omschr" class="inp" placeholder="Korte omschrijving (1 zin)" style="margin-bottom:12px">
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <div style="flex:1">
-        <span class="sec-label">Personen</span>
-        <input id="m-pers" class="inp" type="number" min="1" max="50" placeholder="4">
+    <div id="mbox-scroll">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h2 style="font-size:17px;color:var(--text)">Recept bewerken</h2>
+        <button onclick="sluitModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);line-height:1">✕</button>
       </div>
-      <div style="flex:1">
-        <span class="sec-label">Afbeelding URL</span>
-        <input id="m-img" class="inp" placeholder="https://...">
+      <span class="sec-label">Titel</span>
+      <input id="m-titel" class="inp" placeholder="Naam van het recept" style="margin-bottom:12px">
+      <span class="sec-label">Omschrijving</span>
+      <input id="m-omschr" class="inp" placeholder="Korte omschrijving (1 zin)" style="margin-bottom:12px">
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <div style="flex:1">
+          <span class="sec-label">Personen</span>
+          <input id="m-pers" class="inp" type="number" min="1" max="50" placeholder="4">
+        </div>
+        <div style="flex:1">
+          <span class="sec-label">Afbeelding URL</span>
+          <input id="m-img" class="inp" placeholder="https://...">
+        </div>
       </div>
-    </div>
-    <span class="sec-label">Keuken</span>
-    <div id="m-k" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
-    <span class="sec-label">Categorie</span>
-    <div id="m-c" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
-    <span class="sec-label">Tags</span>
-    <div id="m-t" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;min-height:20px"></div>
-    <div style="display:flex;gap:7px;margin-bottom:16px">
-      <input id="m-ti" class="inp" placeholder="Nieuwe tag..." onkeydown="if(event.key==='Enter')addMTag()" style="flex:1">
-      <button class="btn btn-light" onclick="addMTag()">+ Tag</button>
-    </div>
-    <span class="sec-label">Bereidingstijd</span>
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
-      <div style="flex:1">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Actieve tijd (min)</div>
-        <input id="m-tb" class="inp" type="number" min="0" step="5" placeholder="bijv. 30">
+      <span class="sec-label">Keuken</span>
+      <div id="m-k" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
+      <span class="sec-label">Categorie</span>
+      <div id="m-c" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
+      <span class="sec-label">Tags</span>
+      <div id="m-t" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;min-height:20px"></div>
+      <div style="display:flex;gap:7px;margin-bottom:16px">
+        <input id="m-ti" class="inp" placeholder="Nieuwe tag..." onkeydown="if(event.key==='Enter')addMTag()" style="flex:1">
+        <button class="btn btn-light" onclick="addMTag()">+ Tag</button>
       </div>
-      <div style="flex:1">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Wachttijd (min)</div>
-        <input id="m-tw" class="inp" type="number" min="0" step="5" placeholder="bijv. 60">
+      <span class="sec-label">Bereidingstijd</span>
+      <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Actieve tijd (min)</div>
+          <input id="m-tb" class="inp" type="number" min="0" step="5" placeholder="bijv. 30">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Wachttijd (min)</div>
+          <input id="m-tw" class="inp" type="number" min="0" step="5" placeholder="bijv. 60">
+        </div>
       </div>
+      <span class="sec-label">Ingrediënten</span>
+      <div id="m-ings" style="margin-bottom:6px"></div>
+      <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMIng()">+ Ingrediënt</button>
+      <span class="sec-label">Bereidingsstappen</span>
+      <div id="m-stps" style="margin-bottom:6px"></div>
+      <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMStap()">+ Stap</button>
+      <span class="sec-label">Notities</span>
+      <textarea id="m-n" class="inp" style="min-height:70px;margin-bottom:8px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
     </div>
-    <span class="sec-label">Ingrediënten</span>
-    <div id="m-ings" style="margin-bottom:6px"></div>
-    <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMIng()">+ Ingrediënt</button>
-    <span class="sec-label">Bereidingsstappen</span>
-    <div id="m-stps" style="margin-bottom:6px"></div>
-    <button class="btn btn-light" style="margin-bottom:16px;font-size:12px" onclick="addMStap()">+ Stap</button>
-    <span class="sec-label">Notities</span>
-    <textarea id="m-n" class="inp" style="min-height:70px;margin-bottom:14px" placeholder="Persoonlijke tips, aanpassingen..."></textarea>
-    <button class="btn btn-dark btn-w" onclick="saveModal()">Opslaan</button>
+    <div id="mbox-footer">
+      <button class="btn btn-dark btn-w" onclick="saveModal()">Opslaan</button>
+    </div>
   </div>
 </div>
 
