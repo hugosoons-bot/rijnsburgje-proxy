@@ -1565,7 +1565,7 @@ function renderAuth(){
       <span class="sec-label">Wachtwoord</span>
       <div style="position:relative;margin-bottom:20px">
         <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
-        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Wachtwoord tonen/verbergen">
+        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;padding:0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Wachtwoord tonen/verbergen">
           <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
