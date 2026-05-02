@@ -1167,9 +1167,9 @@ function buildCard(r,opts={}){
     </div>
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
+      ${showSel?`<button class="btn ${sel?'btn-ghost':'btn-dark'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Label</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
-      ${showSel?`<button class="btn ${sel?'btn-ghost':'btn-dark'}" onclick="toggleSel('${r.id}')">${sel?'Deselecteer':'Kies voor week'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
       ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
