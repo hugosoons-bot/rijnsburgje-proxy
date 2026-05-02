@@ -219,6 +219,9 @@ textarea.inp{resize:vertical}
 .sqty{font-size:13px;color:var(--text2);font-weight:600;white-space:nowrap}
 .sdel{background:transparent;border:none;color:var(--border2);font-size:14px;padding:4px 6px;cursor:pointer;transition:color .15s;flex-shrink:0}
 .sdel:hover{color:var(--red)}
+.sdrag{font-size:14px;color:var(--border2);cursor:grab;flex-shrink:0;user-select:none;padding:0 2px}
+.afd-sel{border:1px solid var(--border);background:var(--surface2);font-size:15px;cursor:pointer;padding:2px 4px;border-radius:6px;flex-shrink:0;width:auto;color:var(--text)}
+.afd-group.drag-over{outline:2px dashed var(--accent);outline-offset:4px;border-radius:var(--radius)}
 .done-section{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:20px}
 .done-section h3{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .done-items{display:flex;flex-direction:column;gap:4px}
@@ -1429,9 +1432,10 @@ async function addExtra(){
   const n=document.getElementById('en')?.value?.trim();if(!n)return;
   const hv=parseFloat(document.getElementById('ehv')?.value)||1;
   const een=document.getElementById('eee')?.value?.trim()||'st';
-  const item={naam:n,hoeveelheid:hv,eenheid:een,done:false,extra:true,afd:getAfd(n)};
+  const afdKeuze=document.getElementById('eafd')?.value;
+  const item={naam:n,hoeveelheid:hv,eenheid:een,done:false,extra:true,afd:afdKeuze||getAfd(n)};
   S.extraItems.push(item);S.shopItems.push(item);
-  document.getElementById('en').value='';document.getElementById('ehv').value='';document.getElementById('eee').value='';
+  document.getElementById('en').value='';document.getElementById('ehv').value='';document.getElementById('eee').value='';document.getElementById('eafd').value='';
   rIP();
   if(S.gebruiker){
     const lijstId=await ensureLijstId();
@@ -1665,6 +1669,17 @@ function renderWeekmenu(){
     <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="if(confirm('Weekmenu wissen?'))resetWeekmenu()">Weekmenu wissen</button>`:''}`;}
 
 
+let dragShopIdx=null;
+function startDragShop(idx){dragShopIdx=idx;}
+function dragOverAfd(el){el.classList.add('drag-over');}
+function dragLeaveAfd(el){el.classList.remove('drag-over');}
+function dropOnAfd(el,afd){el.classList.remove('drag-over');if(dragShopIdx===null)return;moveShopAfd(dragShopIdx,afd);dragShopIdx=null;}
+function moveShopAfd(idx,afd){
+  if(!S.shopItems[idx])return;
+  S.shopItems[idx].afd=afd;
+  const ei=S.extraItems.indexOf(S.shopItems[idx]);if(ei!==-1)S.extraItems[ei].afd=afd;
+  rIP();
+}
 function renderBoodschappen(){
   if(S.shopItems.length===0&&S.geselecteerd.length>0)bouwShop();
 
@@ -1698,6 +1713,10 @@ function renderBoodschappen(){
         <input id="en" class="inp" style="flex:2;min-width:110px" placeholder="bijv. bananen" onkeydown="if(event.key==='Enter')addExtra()">
         <input id="ehv" class="inp" style="width:56px;text-align:center" type="number" min="0.1" step="0.1" placeholder="1">
         <input id="eee" class="inp" style="width:56px" placeholder="st">
+        <select id="eafd" class="inp" style="flex:1;min-width:110px">
+          <option value="">Auto-detecteren</option>
+          ${AFDS.map(a=>`<option value="${a.n}">${a.e} ${a.n}</option>`).join('')}
+        </select>
         <button class="btn btn-accent" onclick="addExtra()" style="white-space:nowrap">+ Voeg toe</button>
       </div>
     </div>
@@ -1705,17 +1724,21 @@ function renderBoodschappen(){
     <!-- Actieve items per afdeling -->
     ${groepen.length===0&&actief.length===0?'<div class="hint">Alle boodschappen zijn afgevinkt 🎉</div>':''}
     ${groepen.map(g=>`
-      <div>
+      <div class="afd-group" ondragover="event.preventDefault();dragOverAfd(this)" ondragleave="dragLeaveAfd(this)" ondrop="event.preventDefault();dropOnAfd(this,'${g.n}')">
         <div class="afd-header">
           <span class="afd-title">${g.e} ${g.n}</span>
           <div class="afd-line"></div>
           <span class="afd-count">${g.items.length}</span>
         </div>
         ${g.items.map(item=>`
-          <div class="sitem" style="background:${g.k}">
+          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})">
+            <span class="sdrag" title="Slepen om categorie te wijzigen">⠿</span>
             <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
-            <span class="sname" onclick="toggleShop(${item.idx})">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
+            <span class="sname" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
+            <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
+              ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e}</option>`).join('')}
+            </select>
             <button class="sdel" onclick="delShop(${item.idx})">✕</button>
           </div>`).join('')}
       </div>`).join('')}
