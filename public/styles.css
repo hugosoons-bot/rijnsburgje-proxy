@@ -1,0 +1,242 @@
+/* ================================================
+   Huisstijl — Optie C
+   Gegenereerd via Claude
+   ================================================ */
+
+/* ── Google Font ── */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
+
+/* ── Kleurenvariabelen ── */
+:root {
+  --color-bg:          #FFF3D6;  /* White Chocolate — achtergrond     */
+  --color-primary:     #FF5E32;  /* Tangerine Blaze  — titels / CTA   */
+  --color-dark:        #1A0088;  /* Royal Blue       — tekst / nav     */
+  --color-accent:      #B6CF4F;  /* Lime Zest        — highlights/tags */
+  --color-accent-text: #3A4A00;  /* Donkergroen      — tekst op lime   */
+  --color-text:        #1A0088;  /* Bodytekst                          */
+  --color-text-muted:  #4A3A80;  /* Subtekst / labels                  */
+}
+
+/* ── Reset & basis ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'DM Sans', Helvetica, Arial, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typografie ── */
+h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--color-dark);
+}
+
+h4, h5, h6 {
+  font-weight: 500;
+  color: var(--color-dark);
+}
+
+p {
+  color: var(--color-text);
+  margin-bottom: 1rem;
+}
+
+small,
+.text-muted {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* ── Links ── */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-dark);
+}
+
+/* ── Knoppen ── */
+button,
+.btn {
+  font-family: 'DM Sans', Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+  display: inline-block;
+}
+
+button:hover,
+.btn:hover {
+  opacity: 0.88;
+}
+
+button:active,
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* Primair — oranje */
+.btn-primary,
+button.primary {
+  background-color: var(--color-primary);
+  color: var(--color-bg);
+}
+
+/* Secundair — blauw */
+.btn-secondary,
+button.secondary {
+  background-color: var(--color-dark);
+  color: var(--color-bg);
+}
+
+/* Accent — lime */
+.btn-accent,
+button.accent {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* Outline — oranje rand */
+.btn-outline,
+button.outline {
+  background-color: transparent;
+  border: 2px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-outline:hover,
+button.outline:hover {
+  background-color: var(--color-primary);
+  color: var(--color-bg);
+}
+
+/* ── Navigatie ── */
+nav {
+  background-color: var(--color-dark);
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+nav a {
+  color: var(--color-bg);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+nav a:hover {
+  color: var(--color-accent);
+}
+
+/* ── Cards ── */
+.card {
+  background-color: #fff8e8;
+  border: 1px solid rgba(26, 0, 136, 0.12);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
+/* ── Tags / badges ── */
+.tag {
+  display: inline-block;
+  background-color: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 3px 12px;
+  border-radius: 999px;
+}
+
+.tag-blue {
+  background-color: var(--color-dark);
+  color: var(--color-bg);
+}
+
+.tag-orange {
+  background-color: var(--color-primary);
+  color: var(--color-bg);
+}
+
+/* ── Formulieren ── */
+input,
+textarea,
+select {
+  font-family: 'DM Sans', Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  color: var(--color-dark);
+  background-color: #fff8e8;
+  border: 1.5px solid rgba(26, 0, 136, 0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+  width: 100%;
+  transition: border-color 0.2s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-dark);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ── Hulpklassen ── */
+.text-primary  { color: var(--color-primary); }
+.text-dark     { color: var(--color-dark); }
+.text-accent   { color: var(--color-accent-text); }
+.bg-primary    { background-color: var(--color-primary); }
+.bg-dark       { background-color: var(--color-dark); }
+.bg-accent     { background-color: var(--color-accent); }
+.bg-base       { background-color: var(--color-bg); }
