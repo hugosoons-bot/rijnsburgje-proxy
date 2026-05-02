@@ -640,15 +640,16 @@ function getAfd(naam){const n=naam.toLowerCase();for(const a of AFDS){if(a.w.som
 function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken];return EMOJI_MAP.default;}
 
 // ── Weekmenu Supabase ─────────────────────────────────────────────────────────
+function localeDateStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function getMaandag(){
   const d=new Date();
-  const m=new Date(d);m.setDate(d.getDate()-d.getDay());m.setHours(0,0,0,0);
-  return m.toISOString().split('T')[0];
+  const sun=new Date(d.getFullYear(),d.getMonth(),d.getDate()-d.getDay());
+  return localeDateStr(sun);
 }
 function getVolgendeWeek(){
   const d=new Date(getMaandag()+'T00:00:00');
   d.setDate(d.getDate()+7);
-  return d.toISOString().split('T')[0];
+  return localeDateStr(d);
 }
 function formatMaandag(dateStr){
   const d=new Date(dateStr+'T00:00:00');
@@ -675,7 +676,7 @@ function formatWeekBereik(maandag){
 function verschuifWeek(delta){
   const d=new Date((S.actieveWeek||getMaandag())+'T00:00:00');
   d.setDate(d.getDate()+delta*7);
-  wisselWeek(d.toISOString().split('T')[0]);
+  wisselWeek(localeDateStr(d));
 }
 async function wisselWeek(nieuweWeek){
   S.actieveWeek=nieuweWeek;
@@ -700,7 +701,7 @@ async function laadWeekmenu(){
       if(i.servings)S.weekPers[i.recipe_id]=i.servings;
       if(i.day_of_week!=null){
         const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
-        const ds=d.toISOString().split('T')[0];
+        const ds=localeDateStr(d);
         if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
         if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
         geselSet.add(i.recipe_id);
@@ -714,7 +715,7 @@ async function laadAlleWeekMenus(){
   if(!S.gebruiker)return;
   const basis=new Date(getMaandag()+'T00:00:00');
   const weken=[];
-  for(let i=0;i<5;i++){const d=new Date(basis);d.setDate(d.getDate()+i*7);weken.push(d.toISOString().split('T')[0]);}
+  for(let i=0;i<5;i++){const d=new Date(basis);d.setDate(d.getDate()+i*7);weken.push(localeDateStr(d));}
   const{data:menus}=await DB.from('week_menus').select('id,week_start').eq('user_id',S.gebruiker.id).in('week_start',weken);
   if(!menus||!menus.length){S.receptWeek={};return;}
   const weekMap={};menus.forEach(m=>weekMap[m.id]=m.week_start);
@@ -725,7 +726,7 @@ async function laadAlleWeekMenus(){
     const ws=weekMap[i.menu_id];S.receptWeek[i.recipe_id]=ws;
     if(i.day_of_week!=null){
       const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
-      const ds=d.toISOString().split('T')[0];
+      const ds=localeDateStr(d);
       if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
       if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
     }
@@ -1365,7 +1366,7 @@ async function bewaarVoorVolgendeWeek(){
   if(!S.gebruiker)return;
   const aw=new Date((S.actieveWeek||getMaandag())+'T00:00:00');
   aw.setDate(aw.getDate()+7);
-  const vMaandag=aw.toISOString().split('T')[0];
+  const vMaandag=localeDateStr(aw);
   let menuId;
   const{data:em}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',vMaandag).maybeSingle();
   if(em)menuId=em.id;
@@ -1607,7 +1608,7 @@ function renderWeekmenu(){
   const totaal=Object.values(perDag).reduce((s,a)=>s+a.length,0);
   const dagRijen=dagNamen.map((naam,i)=>{
     const d=new Date(aw+'T00:00:00');d.setDate(d.getDate()+i);
-    const ds=d.toISOString().split('T')[0];
+    const ds=localeDateStr(d);
     const recepten=perDag[i]||[];
     const receptHTML=recepten.map(r=>`<div class="dag-recept-item">
         <div>
