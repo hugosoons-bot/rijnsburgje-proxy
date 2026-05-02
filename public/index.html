@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#1A0088" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="'t Rijnsburgje" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Restaurant 't Rijnsburgje</title>
@@ -2166,6 +2172,15 @@ window.addEventListener('DOMContentLoaded',async()=>{
   }
   render();
 });
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('✅ PWA actief:', reg.scope))
+        .catch(err => console.log('❌ SW fout:', err));
+    });
+  }
 </script>
 </body>
 </html>
