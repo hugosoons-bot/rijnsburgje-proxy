@@ -404,6 +404,20 @@ textarea.inp{resize:vertical}
   </div>
 </div>
 
+<!-- Kook-modal: recept bekijken vanuit weekmenu -->
+<div id="kook-modal" onclick="if(event.target===this)sluitKookModal()">
+  <div class="dpk-box" style="max-width:520px">
+    <div class="dpk-head">
+      <span class="dpk-head-titel" id="kook-titel"></span>
+      <button class="dpk-sluit" onclick="sluitKookModal()">✕</button>
+    </div>
+    <div class="dpk-scroll" id="kook-body"></div>
+    <div class="dpk-foot">
+      <button class="btn btn-dark btn-w" onclick="sluitKookModal()">Klaar</button>
+    </div>
+  </div>
+</div>
+
 <script src="/supabase.js"></script>
 <script>
 // ── Supabase ──────────────────────────────────────────────────────────────────
@@ -448,7 +462,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
-  actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,
+  actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,kookModal:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
@@ -1617,6 +1631,42 @@ function renderZoeken(){
       :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL of plak tekst om een recept te importeren.</div>':'')}`;
 }
 
+function openKookModal(receptId){
+  const r=S.recepten.find(x=>x.id===receptId)||S.menuReceptenMap[receptId];
+  if(!r)return;
+  S.kookModal={receptId,pers:gP(receptId)};
+  renderKookBody();
+  document.getElementById('kook-modal').classList.add('open');
+}
+function sluitKookModal(){
+  document.getElementById('kook-modal').classList.remove('open');
+  S.kookModal=null;
+}
+function kookSP(delta){
+  if(!S.kookModal)return;
+  S.kookModal.pers=Math.max(1,S.kookModal.pers+delta);
+  S.weekPers[S.kookModal.receptId]=S.kookModal.pers;
+  renderKookBody();
+}
+function renderKookBody(){
+  const{receptId,pers}=S.kookModal;
+  const r=S.recepten.find(x=>x.id===receptId)||S.menuReceptenMap[receptId];
+  if(!r)return;
+  const base=r.personen||4;
+  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,base,pers)} ${h(i.eenheid)}</strong> ${h(i.naam)}</li>`).join('');
+  const stps=(r.stappen||[]).map(s=>`<li style="margin-bottom:8px">${h(s)}</li>`).join('');
+  document.getElementById('kook-titel').textContent=r.titel;
+  document.getElementById('kook-body').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:var(--radius);padding:10px 14px;margin-bottom:18px">
+      <span style="font-size:14px;font-weight:600;color:var(--text)">Aantal personen</span>
+      <div class="stepper"><button onclick="kookSP(-1)">−</button><span>${pers}</span><button onclick="kookSP(1)">+</button></div>
+    </div>
+    <h4 style="margin-bottom:8px">Ingrediënten</h4>
+    <ul style="padding-left:18px;margin-bottom:18px;line-height:2">${ings}</ul>
+    <h4 style="margin-bottom:8px">Bereiding</h4>
+    <ol style="padding-left:18px">${stps}</ol>
+    ${r.bron?`<a href="${h(r.bron)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);margin-top:14px;display:inline-block">Origineel recept →</a>`:''}`;
+}
 function renderWeekmenu(){
   const aw=S.actieveWeek||getMaandag();
   const dagNamen=['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
@@ -1627,8 +1677,8 @@ function renderWeekmenu(){
     const ds=localeDateStr(d);
     const recepten=perDag[i]||[];
     const receptHTML=recepten.map(r=>`<div class="dag-recept-item">
-        <div>
-          <div class="dag-recept-naam">${h(r.titel)}</div>
+        <div style="cursor:pointer;flex:1;min-width:0" onclick="openKookModal('${r.id}')">
+          <div class="dag-recept-naam">${h(r.titel)} <span style="font-size:11px;color:var(--accent)">→</span></div>
           <div class="dag-recept-meta">${r.keuken?h(r.keuken)+' · ':''}${gP(r.id)} pers.</div>
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
