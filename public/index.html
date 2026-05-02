@@ -254,6 +254,7 @@ textarea.inp{resize:vertical}
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('profiel')">Profiel</button>
     </nav>
   </div>
 </div>
@@ -1473,6 +1474,72 @@ function renderVrienden(){
     </div>`;
 }
 
+function renderProfiel(){
+  const naam=S.profiel?.display_name||'';
+  const bio=S.profiel?.bio||'';
+  const init=naam?naam[0].toUpperCase():'?';
+  return`<div style="max-width:480px;margin:0 auto;padding:8px 0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--color-primary);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0">${h(init)}</div>
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${h(naam)}</div>
+        <div style="font-size:12px;color:var(--text3)">${h(S.gebruiker?.email||'')}</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px">Zichtbare naam</div>
+      <input id="p-naam" class="inp" value="${h(naam)}" placeholder="Jouw naam" style="margin-bottom:10px">
+      <button class="btn btn-dark btn-w" onclick="opslaanNaam()">Opslaan</button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px">Bio</div>
+      <textarea id="p-bio" class="inp" rows="3" placeholder="Vertel iets over jezelf..." style="margin-bottom:10px">${h(bio)}</textarea>
+      <button class="btn btn-dark btn-w" onclick="opslaanBio()">Opslaan</button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px">Wachtwoord wijzigen</div>
+      <span class="sec-label">Nieuw wachtwoord</span>
+      <input id="p-ww1" class="inp" type="password" placeholder="Nieuw wachtwoord" style="margin-bottom:8px">
+      <span class="sec-label">Bevestig wachtwoord</span>
+      <input id="p-ww2" class="inp" type="password" placeholder="Herhaal wachtwoord" style="margin-bottom:10px">
+      <div id="p-fout" style="font-size:13px;color:var(--red);margin-bottom:8px;display:none"></div>
+      <button class="btn btn-dark btn-w" onclick="wijzigWachtwoord()">Wachtwoord wijzigen</button>
+    </div>
+
+    <button class="btn btn-w" style="background:var(--red-bg);color:var(--red);border:1px solid var(--border)" onclick="uitloggen()">Uitloggen</button>
+  </div>`;
+}
+
+async function opslaanNaam(){
+  const naam=document.getElementById('p-naam')?.value?.trim();
+  if(!naam||!S.gebruiker)return;
+  const{error}=await DB.from('profiles').update({display_name:naam}).eq('id',S.gebruiker.id);
+  if(!error){S.profiel={...S.profiel,display_name:naam};rIP();}
+  else alert('Kon naam niet opslaan: '+error.message);
+}
+async function opslaanBio(){
+  if(!S.gebruiker)return;
+  const bio=document.getElementById('p-bio')?.value?.trim()||'';
+  const{error}=await DB.from('profiles').update({bio}).eq('id',S.gebruiker.id);
+  if(!error){S.profiel={...S.profiel,bio};rIP();}
+  else alert('Kon bio niet opslaan: '+error.message);
+}
+async function wijzigWachtwoord(){
+  const ww1=document.getElementById('p-ww1')?.value||'';
+  const ww2=document.getElementById('p-ww2')?.value||'';
+  const foutEl=document.getElementById('p-fout');
+  const toonFout=t=>{foutEl.textContent=t;foutEl.style.display='';};
+  if(ww1!==ww2)return toonFout('Wachtwoorden komen niet overeen');
+  if(ww1.length<6)return toonFout('Wachtwoord moet minimaal 6 tekens zijn');
+  foutEl.style.display='none';
+  const{error}=await DB.auth.updateUser({password:ww1});
+  if(error)toonFout(error.message);
+  else{document.getElementById('p-ww1').value='';document.getElementById('p-ww2').value='';alert('Wachtwoord gewijzigd!');}
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function renderAuth(){
   if(S.scherm==='laden')return'<div class="hint" style="padding-top:40vh">Laden...</div>';
@@ -1551,7 +1618,7 @@ async function login(){
     const{data,error}=await DB.auth.signInWithPassword({email,password:ww});
     if(error)throw error;
     S.gebruiker=data.user;
-    const{data:p}=await DB.from('profiles').select('display_name').eq('id',data.user.id).single();
+    const{data:p}=await DB.from('profiles').select('display_name,bio').eq('id',data.user.id).single();
     S.profiel=p||{display_name:email};
     await lod();S.scherm='app';render();
     await verwerkPendingVolg();
@@ -1701,14 +1768,15 @@ function render(){
   }
   hdr.style.display='';
   const naam=S.profiel?.display_name||S.gebruiker?.email||'';
-  document.getElementById('hdr-sub').innerHTML=`${h(naam)} &middot; ${S.recepten.length} recepten <a href="#" onclick="uitloggen();return false" style="color:var(--text3);font-size:10px;margin-left:8px">uitloggen</a>`;
-  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','zoeken','weekmenu','boodschappen','vrienden'][i]===S.tab));
+  document.getElementById('hdr-sub').innerHTML=`${h(naam)} &middot; ${S.recepten.length} recepten`;
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','zoeken','weekmenu','boodschappen','vrienden','profiel'][i]===S.tab));
   let html='';
   if(S.tab==='recepten')html=renderRecepten();
   else if(S.tab==='zoeken')html=renderZoeken();
   else if(S.tab==='weekmenu')html=renderWeekmenu();
   else if(S.tab==='boodschappen')html=renderBoodschappen();
   else if(S.tab==='vrienden')html=renderVrienden();
+  else if(S.tab==='profiel')html=renderProfiel();
   document.getElementById('content').innerHTML=html;
 }
 async function importeerLink(url){
