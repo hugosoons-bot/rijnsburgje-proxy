@@ -1230,7 +1230,6 @@ function renderRecepten(){
     <div class="filter-wrap">
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
-      <button class="fb nnek${S.hideNNEK?' on':''}" onclick="S.hideNNEK=!S.hideNNEK;rIP()">🚫 Verberg "Niet nog een keer"</button>
     </div>
     ${S.recepten.length===0
       ?`<div class="empty"><span>👨‍🍳</span>Nog geen recepten opgeslagen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
