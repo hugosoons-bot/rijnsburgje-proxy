@@ -1181,7 +1181,7 @@ function renderRecepten(){
   const cF=['Alle',...CATS].map(c=>`<button class="fb${S.fC===c?' on':''}" onclick="S.fC='${h(c)}';rIP()">${h(c)}</button>`).join('');
   return`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
-      <input class="inp" style="flex:1" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()">
+      <input id="zoek-inp" class="inp" style="flex:1" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()">
       <button class="btn btn-accent" onclick="setTab('zoeken')" style="white-space:nowrap;flex-shrink:0" title="Recept toevoegen">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Toevoegen
@@ -1698,7 +1698,15 @@ async function importeerLink(url){
   }catch(e){S.fout=e.message;}
   finally{S.laden=false;render();}
 }
-function rIP(){const y=window.scrollY;render();window.scrollTo(0,y);}
+function rIP(){
+  const y=window.scrollY;
+  const fid=document.activeElement?.id;
+  const ss=document.activeElement?.selectionStart;
+  const se=document.activeElement?.selectionEnd;
+  render();
+  window.scrollTo(0,y);
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,se);}catch(e){}}}
+}
 window.addEventListener('DOMContentLoaded',async()=>{
   const params=new URLSearchParams(window.location.search);
   if(params.get('volg'))pendingVolgId=params.get('volg');
