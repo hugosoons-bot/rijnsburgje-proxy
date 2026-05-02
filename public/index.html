@@ -258,10 +258,9 @@ textarea.inp{resize:vertical}
     <div id="hdr-sub">laden...</div>
     <nav id="tabs" role="tablist" aria-label="Navigatie">
       <button class="tb on" role="tab" aria-selected="true" onclick="setTab('recepten')">Recepten</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('zoeken')">Ontdekken</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('profiel')">Profiel</button>
     </nav>
   </div>
@@ -371,7 +370,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
-  actieveWeek:null,receptWeek:{},weekPickerFor:null,
+  actieveWeek:null,receptWeek:{},weekPickerFor:null,vriendenSubTab:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
@@ -739,7 +738,8 @@ async function laadFeedMenus(){
 // ── Mutations ─────────────────────────────────────────────────────────────────
 function setTab(t){
   S.tab=t;S.fout='';
-  document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'recepten',zoeken:'ontdekken',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'vrienden'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
+  if(t==='vrienden'){S.vriendenSubTab=null;laadVrienden();laadPubliekeRecepten();}
+  document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'recepten',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'vrienden',profiel:'profiel'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
   render();
 }
 async function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;render();await savRecept(r);}}
@@ -1321,17 +1321,7 @@ function renderZoeken(){
     <div class="mode-row" style="margin-bottom:16px">
       <button class="mb${S.ontdekTab==='url'?' on':''}" onclick="S.ontdekTab='url';render()">🔗 URL</button>
       <button class="mb${S.ontdekTab==='tekst'?' on':''}" onclick="S.ontdekTab='tekst';render()">✏️ Tekst</button>
-      <button class="mb${S.ontdekTab==='gemeenschap'?' on':''}" onclick="S.ontdekTab='gemeenschap';laadPubliekeRecepten()">👥 Gemeenschap</button>
     </div>`;
-
-  if(S.ontdekTab==='gemeenschap'){
-    const gHTML=S.ladenGemeenschap
-      ?'<div class="hint">Recepten laden...</div>'
-      :S.publiekeRecepten.length===0
-        ?'<div class="hint">Nog geen publieke recepten van andere gebruikers. Zet een recept op "Publiek" via het tabblad Recepten.</div>'
-        :`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.publiekeRecepten.length} publiek recept${S.publiekeRecepten.length===1?'':'en'} van andere gebruikers</p><div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>`;
-    return`<div class="search-wrap"><h2>Ontdekken</h2>${tabsBtns}</div>${gHTML}`;
-  }
 
   let paneel='';
   if(S.ontdekTab==='url'){
@@ -1360,7 +1350,10 @@ function renderZoeken(){
 
   return`
     <div class="search-wrap">
-      <h2>Ontdekken</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="margin-bottom:0">Recept toevoegen</h2>
+        <button onclick="setTab('recepten')" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:4px;line-height:1">✕</button>
+      </div>
       ${tabsBtns}
       ${paneel}
     </div>
@@ -1485,69 +1478,70 @@ function renderVrienden(){
       ${showTerug&&volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
     </div>`;
   }
-  return`
-    <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text);margin-bottom:16px">Vrienden</h2>
 
-    ${S.ikVolg.length>0?`
-    <div style="margin-bottom:20px">
-      <span class="sec-label">Weekmenu van mensen die je volgt</span>
-      ${S.ladenFeed?'<div class="hint">Feed laden...</div>'
-        :S.feedMenus.length===0?'<div class="hint">Niemand heeft zijn weekmenu gedeeld deze week.</div>'
-        :S.feedMenus.map(menu=>`
-          <div class="search-wrap" style="margin-bottom:12px">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">
-              👤 ${h(menu.naam)} kookt deze week: ${menu.recepten.map(r=>h(r.titel)).join(' &amp; ')}
-            </div>
-            <div class="cards-grid">${menu.recepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>
-          </div>`).join('')}
-    </div>
-    <div style="margin-bottom:20px">
-      <span class="sec-label">Recent gedeelde recepten</span>
-      ${S.ladenFeed?'<div class="hint">Feed laden...</div>'
-        :S.feed.length===0?'<div class="hint">Nog geen recepten gedeeld door mensen die je volgt.</div>'
-        :`<div class="cards-grid">${S.feed.map(r=>buildCard(r,{showLike:true,showKopieer:true,showAuteur:true})).join('')}</div>`}
-    </div>`:''}
-
-    <div class="search-wrap" style="margin-bottom:16px;text-align:center">
-      <div style="font-size:28px;margin-bottom:8px">🔗</div>
-      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Nodig vrienden uit</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Stuur deze link naar iemand om een account aan te maken</div>
-      <button class="btn btn-accent btn-w" onclick="deelVolgLink()" style="margin-bottom:8px">Deel volglink — volg mij direct →</button>
-      <button class="btn btn-ghost btn-w" onclick="deelUitnodiging()">Nodig uit voor een account</button>
-    </div>
-
-    <div class="search-wrap" style="margin-bottom:16px">
-      <span class="sec-label">Gebruiker zoeken</span>
-      <div style="display:flex;gap:8px;margin-bottom:${S.vriendenResultaten.length>0?'12':'0'}px">
-        <input id="vz" class="inp" style="flex:1" placeholder="Zoek op naam..." onkeydown="if(event.key==='Enter')zoekGebruikers()">
-        <button class="btn btn-accent" onclick="zoekGebruikers()" ${S.ladenVrienden?'disabled':''}>${S.ladenVrienden?'...':'Zoeken'}</button>
+  if(S.vriendenSubTab==='beheer'){
+    return`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;color:var(--text);margin:0">Vrienden beheren</h2>
+        <button onclick="S.vriendenSubTab=null;rIP()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:4px;line-height:1">✕</button>
       </div>
-      ${S.vriendenResultaten.length>0?`
-        <div>
-          ${S.vriendenResultaten.map(p=>`<div class="friend-row">
+
+      <div class="search-wrap" style="margin-bottom:16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">🔗</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Nodig vrienden uit</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Stuur deze link naar iemand om een account aan te maken</div>
+        <button class="btn btn-accent btn-w" onclick="deelVolgLink()" style="margin-bottom:8px">Deel volglink — volg mij direct →</button>
+        <button class="btn btn-ghost btn-w" onclick="deelUitnodiging()">Nodig uit voor een account</button>
+      </div>
+
+      <div class="search-wrap" style="margin-bottom:16px">
+        <span class="sec-label">Gebruiker zoeken</span>
+        <div style="display:flex;gap:8px;margin-bottom:${S.vriendenResultaten.length>0?'12':'0'}px">
+          <input id="vz" class="inp" style="flex:1" placeholder="Zoek op naam..." onkeydown="if(event.key==='Enter')zoekGebruikers()">
+          <button class="btn btn-accent" onclick="zoekGebruikers()" ${S.ladenVrienden?'disabled':''}>${S.ladenVrienden?'...':'Zoeken'}</button>
+        </div>
+        ${S.vriendenResultaten.length>0?`<div>${S.vriendenResultaten.map(p=>`<div class="friend-row">
             <div class="friend-avatar">${(p.display_name||'?')[0].toUpperCase()}</div>
             <span class="friend-name">${h(p.display_name)}</span>
-            ${volgtIds.has(p.id)
-              ?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`
-              :`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+            ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+          </div>`).join('')}</div>`:''}
+      </div>
+
+      <div style="margin-bottom:20px">
+        <span class="sec-label">Ik volg (${S.ikVolg.length})</span>
+        ${S.ikVolg.length===0?'<div class="hint">Je volgt nog niemand.</div>':S.ikVolg.map(p=>friendRow(p,true,false)).join('')}
+      </div>
+      <div>
+        <span class="sec-label">Volgers (${S.volgers.length})</span>
+        ${S.volgers.length===0?'<div class="hint">Nog geen volgers.</div>':S.volgers.map(p=>friendRow(p,false,true)).join('')}
+      </div>`;
+  }
+
+  // Feed-weergave (standaard)
+  const gemeenschapHTML=S.ladenGemeenschap
+    ?'<div class="hint">Recepten laden...</div>'
+    :S.publiekeRecepten.length===0
+      ?'<div class="hint">Nog geen publieke recepten van andere gebruikers.</div>'
+      :`<div class="cards-grid">${S.publiekeRecepten.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join('')}</div>`;
+
+  return`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--text3)">${S.publiekeRecepten.length||''} recepten van vrienden</div>
+      <button class="btn btn-accent" onclick="S.vriendenSubTab='beheer';rIP()" style="white-space:nowrap;flex-shrink:0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Toevoegen
+      </button>
+    </div>
+    ${S.ikVolg.length>0&&S.feedMenus.length>0?`
+      <div style="margin-bottom:20px">
+        <span class="sec-label">Weekmenu van vrienden</span>
+        ${S.feedMenus.map(menu=>`
+          <div class="search-wrap" style="margin-bottom:10px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">👤 ${h(menu.naam)} kookt deze week: ${menu.recepten.map(r=>h(r.titel)).join(' &amp; ')}</div>
+            <div class="cards-grid">${menu.recepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>
           </div>`).join('')}
-        </div>`:''
-      }
-    </div>
-
-    <div style="margin-bottom:20px">
-      <span class="sec-label">Ik volg (${S.ikVolg.length})</span>
-      ${S.ikVolg.length===0
-        ?'<div class="hint">Je volgt nog niemand.</div>'
-        :S.ikVolg.map(p=>friendRow(p,true,false)).join('')}
-    </div>
-
-    <div>
-      <span class="sec-label">Volgers (${S.volgers.length})</span>
-      ${S.volgers.length===0
-        ?'<div class="hint">Nog geen volgers.</div>'
-        :S.volgers.map(p=>friendRow(p,false,true)).join('')}
-    </div>`;
+      </div>`:''}
+    ${gemeenschapHTML}`;
 }
 
 function renderProfiel(){
@@ -1845,7 +1839,7 @@ function render(){
   hdr.style.display='';
   const naam=S.profiel?.display_name||S.gebruiker?.email||'';
   document.getElementById('hdr-sub').innerHTML=`${h(naam)} &middot; ${S.recepten.length} recepten`;
-  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','zoeken','weekmenu','boodschappen','vrienden','profiel'][i]===S.tab));
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','vrienden','weekmenu','boodschappen','profiel'][i]===S.tab));
   let html='';
   if(S.tab==='recepten')html=renderRecepten();
   else if(S.tab==='zoeken')html=renderZoeken();
