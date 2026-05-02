@@ -583,8 +583,9 @@ function weekLabel(maandag){
 function formatWeekBereik(maandag){
   const d=new Date(maandag+'T00:00:00');
   const z=new Date(d);z.setDate(d.getDate()+6);
-  const fmt=dt=>dt.toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
-  return`${fmt(d)} – ${fmt(z)} ${z.getFullYear()}`;
+  const fmtDag=dt=>dt.toLocaleDateString('nl-NL',{weekday:'long'});
+  const fmtDatum=dt=>dt.toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
+  return`${fmtDag(d)} ${fmtDatum(d)} – ${fmtDag(z)} ${fmtDatum(z)} ${z.getFullYear()}`;
 }
 function verschuifWeek(delta){
   const d=new Date((S.actieveWeek||getMaandag())+'T00:00:00');
