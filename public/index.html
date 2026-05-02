@@ -517,8 +517,15 @@ async function laadPubliekeRecepten(){
   if(!S.gebruiker)return;
   S.ladenGemeenschap=true;rIP();
   const{data,error}=await DB.from('recipes').select('*').eq('is_public',true).neq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
-  S.publiekeRecepten=error?[]:(data||[]).map(fromSB);
-  if(S.publiekeRecepten.length)await laadLikesVoor(S.publiekeRecepten.map(r=>r.id));
+  const recepten=error?[]:(data||[]).map(fromSB);
+  if(recepten.length){
+    const uids=[...new Set(recepten.map(r=>r.eigenaarId).filter(Boolean))];
+    const{data:profielen}=await DB.from('profiles').select('id,display_name').in('id',uids);
+    const nm={};(profielen||[]).forEach(p=>nm[p.id]=p.display_name);
+    recepten.forEach(r=>r.auteursNaam=nm[r.eigenaarId]||'');
+    await laadLikesVoor(recepten.map(r=>r.id));
+  }
+  S.publiekeRecepten=recepten;
   S.ladenGemeenschap=false;rIP();
 }
 async function laadVrienden(){
