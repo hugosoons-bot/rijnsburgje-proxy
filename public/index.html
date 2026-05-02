@@ -113,6 +113,20 @@ a{color:var(--accent);text-decoration:none}
 .wp-opt.wp-actief .wp-bereik{color:var(--accent)}
 .wp-cancel{background:none;border:none;padding:5px 0 0;font-size:12px;color:var(--text3);cursor:pointer;width:100%;text-align:center;font-family:inherit}
 
+/* ── Calendar picker ── */
+.rcard-cal{padding:10px 14px 14px;border-top:1px solid var(--border);background:var(--bg)}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-titel{font-size:13px;font-weight:700;color:var(--text)}
+.cal-nav{background:none;border:none;font-size:18px;color:var(--text2);cursor:pointer;padding:2px 8px;border-radius:6px;line-height:1}
+.cal-nav:hover{background:var(--surface2)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px}
+.cal-dag-hdr{text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px 0}
+.cal-dag{background:none;border:none;border-radius:6px;padding:6px 2px;font-size:13px;color:var(--text);cursor:pointer;text-align:center;min-height:32px;font-family:inherit}
+.cal-dag:hover{background:var(--surface2)}
+.cal-dag.vandaag{background:var(--blue-bg);color:var(--blue);font-weight:700}
+.cal-dag.gekozen{background:var(--accent);color:var(--color-bg);font-weight:700}
+.cal-dag.leeg{pointer-events:none;visibility:hidden}
+
 /* ── Buttons ── */
 .btn{border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s;cursor:pointer;letter-spacing:.01em;display:inline-flex;align-items:center;gap:5px;justify-content:center;min-height:40px}
 .btn-dark{background:var(--color-dark);color:var(--color-bg)}
@@ -370,7 +384,7 @@ let S={
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
-  actieveWeek:null,receptWeek:{},weekPickerFor:null,vriendenSubTab:null,
+  actieveWeek:null,receptWeek:{},receptDag:{},calPicker:null,vriendenSubTab:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
@@ -625,10 +639,13 @@ async function laadWeekmenu(){
   if(!menu){S.menuId=null;S.weekMenuPubliek=false;S.geselecteerd=[];S.weekPers={};}
   else{
     S.menuId=menu.id;S.weekMenuPubliek=menu.is_public||false;
-    const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings').eq('menu_id',menu.id).order('day_of_week');
+    const{data:items}=await DB.from('week_menu_items').select('recipe_id,servings,day_of_week').eq('menu_id',menu.id).order('day_of_week');
     S.geselecteerd=(items||[]).map(i=>i.recipe_id);
     S.weekPers={};
-    (items||[]).forEach(i=>{if(i.servings)S.weekPers[i.recipe_id]=i.servings;});
+    (items||[]).forEach(i=>{
+      if(i.servings)S.weekPers[i.recipe_id]=i.servings;
+      if(i.day_of_week!=null){const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);S.receptDag[i.recipe_id]=d.toISOString().split('T')[0];}
+    });
   }
   await laadAlleWeekMenus();
 }
@@ -641,9 +658,12 @@ async function laadAlleWeekMenus(){
   if(!menus||!menus.length){S.receptWeek={};return;}
   const weekMap={};menus.forEach(m=>weekMap[m.id]=m.week_start);
   const menuIds=menus.map(m=>m.id);
-  const{data:items}=await DB.from('week_menu_items').select('menu_id,recipe_id').in('menu_id',menuIds);
-  S.receptWeek={};
-  (items||[]).forEach(i=>{S.receptWeek[i.recipe_id]=weekMap[i.menu_id];});
+  const{data:items}=await DB.from('week_menu_items').select('menu_id,recipe_id,day_of_week').in('menu_id',menuIds);
+  S.receptWeek={};S.receptDag={};
+  (items||[]).forEach(i=>{
+    const ws=weekMap[i.menu_id];S.receptWeek[i.recipe_id]=ws;
+    if(i.day_of_week!=null){const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);S.receptDag[i.recipe_id]=d.toISOString().split('T')[0];}
+  });
 }
 async function ensureMenuVoorWeek(weekStart){
   if(!S.gebruiker)return null;
@@ -654,11 +674,92 @@ async function ensureMenuVoorWeek(weekStart){
   return nieuw.id;
 }
 function openWeekPicker(id){S.weekPickerFor=S.weekPickerFor===id?null:id;rIP();}
+function formatDagKort(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const dag=d.toLocaleDateString('nl-NL',{weekday:'short'}).replace('.','');
+  const datum=d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+  return`${dag} ${datum}`;
+}
+function openCalPicker(id){
+  if(S.calPicker&&S.calPicker.id===id){S.calPicker=null;rIP();return;}
+  const gekozen=S.receptDag[id];
+  const d=gekozen?new Date(gekozen+'T00:00:00'):new Date();
+  S.calPicker={id,jaar:d.getFullYear(),maand:d.getMonth()};
+  rIP();
+}
+function calNav(delta){
+  if(!S.calPicker)return;
+  let m=S.calPicker.maand+delta,j=S.calPicker.jaar;
+  if(m<0){m=11;j--;}else if(m>11){m=0;j++;}
+  S.calPicker={...S.calPicker,maand:m,jaar:j};rIP();
+}
+function buildCalendar(recipeId){
+  if(!S.calPicker||S.calPicker.id!==recipeId)return'';
+  const{jaar,maand}=S.calPicker;
+  const mnamen=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+  const vandaag=new Date();vandaag.setHours(0,0,0,0);
+  const gekozen=S.receptDag[recipeId];
+  const startKolom=new Date(jaar,maand,1).getDay();
+  const aantalDagen=new Date(jaar,maand+1,0).getDate();
+  const hdrs=['Zo','Ma','Di','Wo','Do','Vr','Za'].map(n=>`<div class="cal-dag-hdr">${n}</div>`).join('');
+  let cellen='';
+  for(let i=0;i<startKolom;i++)cellen+=`<div class="cal-dag leeg"></div>`;
+  for(let dag=1;dag<=aantalDagen;dag++){
+    const ds=`${jaar}-${String(maand+1).padStart(2,'0')}-${String(dag).padStart(2,'0')}`;
+    const dt=new Date(jaar,maand,dag);dt.setHours(0,0,0,0);
+    const isV=dt.getTime()===vandaag.getTime();
+    const isG=ds===gekozen;
+    cellen+=`<button class="cal-dag${isV?' vandaag':''}${isG?' gekozen':''}" onclick="assignToDate('${recipeId}','${ds}')">${dag}</button>`;
+  }
+  return`<div class="rcard-cal">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="calNav(-1)">‹</button>
+      <span class="cal-titel">${mnamen[maand]} ${jaar}</span>
+      <button class="cal-nav" onclick="calNav(1)">›</button>
+    </div>
+    <div class="cal-grid">${hdrs}${cellen}</div>
+    <button class="wp-cancel" onclick="S.calPicker=null;rIP()">Annuleren</button>
+  </div>`;
+}
+async function assignToDate(id,dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const sun=new Date(d);sun.setDate(d.getDate()-d.getDay());sun.setHours(0,0,0,0);
+  const weekStart=sun.toISOString().split('T')[0];
+  S.calPicker=null;
+  const prevDag=S.receptDag[id];
+  const prevWeek=S.receptWeek[id];
+  if(prevDag===dateStr){
+    delete S.receptDag[id];delete S.receptWeek[id];rIP();
+    if(prevWeek===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);slaWeekmenuOp();}
+    else if(prevWeek){const mid=await ensureMenuVoorWeek(prevWeek);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
+    return;
+  }
+  S.receptDag[id]=dateStr;
+  if(prevWeek===weekStart){
+    rIP();
+    if(weekStart===S.actieveWeek){slaWeekmenuOp();}
+    else{const mid=await ensureMenuVoorWeek(weekStart);if(mid){const sv=S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;await DB.from('week_menu_items').upsert({menu_id:mid,recipe_id:id,servings:sv,day_of_week:d.getDay()},{onConflict:'menu_id,recipe_id'});}}
+    return;
+  }
+  S.receptWeek[id]=weekStart;rIP();
+  if(prevWeek){
+    if(prevWeek===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);}
+    else{const mid=await ensureMenuVoorWeek(prevWeek);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
+  }
+  if(weekStart===S.actieveWeek){
+    if(!S.geselecteerd.includes(id))S.geselecteerd.push(id);
+    slaWeekmenuOp();
+  } else {
+    const mid=await ensureMenuVoorWeek(weekStart);
+    if(mid){const sv=S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;await DB.from('week_menu_items').upsert({menu_id:mid,recipe_id:id,servings:sv,day_of_week:d.getDay()},{onConflict:'menu_id,recipe_id'});}
+    if(prevWeek===S.actieveWeek)slaWeekmenuOp();
+  }
+}
 async function assignToWeek(id,weekStart){
   const prev=S.receptWeek[id];
   S.weekPickerFor=null;
   if(prev===weekStart){
-    delete S.receptWeek[id];rIP();
+    delete S.receptWeek[id];delete S.receptDag[id];rIP();
     if(prev===S.actieveWeek){S.geselecteerd=S.geselecteerd.filter(x=>x!==id);slaWeekmenuOp();}
     else{const mid=await ensureMenuVoorWeek(prev);if(mid)await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',id);}
     return;
@@ -700,7 +801,7 @@ async function slaWeekmenuOp(){
   const teInserten=S.geselecteerd.filter(rid=>!rid.startsWith('demo-'));
   if(teInserten.length>0){
     const{error}=await DB.from('week_menu_items').insert(
-      teInserten.map((rid,i)=>({menu_id:menuId,recipe_id:rid,day_of_week:i,servings:S.weekPers[rid]||null}))
+      teInserten.map(rid=>({menu_id:menuId,recipe_id:rid,day_of_week:S.receptDag[rid]?new Date(S.receptDag[rid]+'T00:00:00').getDay():0,servings:S.weekPers[rid]||null}))
     );
     if(error)console.error('Weekmenu opslaan mislukt:',error.message);
   }
@@ -1241,24 +1342,16 @@ function buildCard(r,opts={}){
     </div>
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button>`:''}
-      ${showSel?S.receptWeek[r.id]
-        ?`<button class="btn btn-accent" onclick="openWeekPicker('${r.id}')">Week ${weekNummer(S.receptWeek[r.id])}</button>`
-        :`<button class="btn btn-dark" onclick="openWeekPicker('${r.id}')">Kies voor week</button>`:''}
+      ${showSel?S.receptDag[r.id]
+        ?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">${formatDagKort(S.receptDag[r.id])}</button>`
+        :`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Kies voor dag</button>`:''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
       ${showKopieer?`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Kopieer naar mijn recepten →</button>`:''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
-    ${showSel&&S.weekPickerFor===r.id?`<div class="rcard-week-picker">
-      ${[0,1,2,3,4].map(i=>{
-        const d=new Date(getMaandag()+'T00:00:00');d.setDate(d.getDate()+i*7);
-        const ws=d.toISOString().split('T')[0];
-        const gekozen=S.receptWeek[r.id]===ws;
-        return`<button class="wp-opt${gekozen?' wp-actief':''}" onclick="assignToWeek('${r.id}','${ws}')"><span class="wp-wn">Week ${weekNummer(ws)}</span><span class="wp-bereik">${formatWeekOptieKort(ws)}${gekozen?' ✓':''}</span></button>`;
-      }).join('')}
-      <button class="wp-cancel" onclick="S.weekPickerFor=null;rIP()">Annuleren</button>
-    </div>`:''}
+    ${showSel?buildCalendar(r.id):''}
   </div>`;
 }
 function tD(cid){const d=document.getElementById('d'+cid),t=d.previousElementSibling;d.classList.toggle('open');t.querySelector('.arr').textContent=d.classList.contains('open')?'▲':'▼';}
