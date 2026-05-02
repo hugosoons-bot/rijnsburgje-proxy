@@ -44,7 +44,7 @@ button{cursor:pointer}
 a{color:var(--accent);text-decoration:none}
 
 /* ── Header ── */
-#hdr{background:var(--color-dark);padding:16px 20px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+#hdr{background:var(--color-dark);padding:16px 20px 0;padding-top:calc(16px + env(safe-area-inset-top));position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 #hdr-inner{max-width:800px;margin:0 auto}
 #hdr h1{font-size:21px;font-weight:700;color:var(--color-bg);letter-spacing:-.02em}
 #hdr h1 span{font-weight:400;font-style:italic}
