@@ -261,6 +261,7 @@ textarea.inp{resize:vertical}
 .friend-name{flex:1;font-size:14px;font-weight:500;color:var(--text)}
 .friend-avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--accent);flex-shrink:0}
 .rcard-auteur{position:absolute;top:8px;left:8px;font-size:11px;font-weight:500;color:#1A0088;background:rgba(255,255,255,0.75);backdrop-filter:blur(4px);padding:2px 8px;border-radius:999px;pointer-events:none;z-index:1}
+.rcard-stars-overlay{position:absolute;bottom:8px;right:8px;background:rgba(255,255,255,0.75);backdrop-filter:blur(4px);padding:2px 8px;border-radius:999px;display:flex;gap:2px;z-index:1}
 .btn-like{background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--text2);padding:6px 10px;border-radius:20px;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
 .btn-like:hover{background:var(--red-bg);color:var(--red)}
 .btn-like.liked{color:var(--red)}
@@ -1466,22 +1467,19 @@ function buildCard(r,opts={}){
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
       ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}
       ${showAuteur&&r.auteursNaam?`<div class="rcard-auteur">👤 ${h(r.auteursNaam)}</div>`:''}
+      <div class="rcard-stars-overlay">${buildStars(r.rating||0,r.id).replace('<div class="stars">','').replace('</div>','')}</div>
     </div>
     <div class="rcard-body">
       ${buildLabels(r)}
       <div class="rcard-title">${h(r.titel)}</div>
       <div class="rcard-desc">${h(r.omschrijving)}</div>
       ${r.notities?`<div class="rcard-note">📝 ${h(r.notities)}</div>`:''}
-      <div class="rcard-meta">
-        ${buildStars(r.rating||0,r.id)}
-        ${stepper
-          ?`<div class="stepper"><button onclick="sP('${r.id}',${p-1})">−</button><span>${p}</span><button onclick="sP('${r.id}',${p+1})">+</button></div>`
-          :`<span class="rcard-pers">🍽 ${p} personen</span>`}
-      </div>
+      ${stepper?`<div class="rcard-meta"><div class="stepper"><button onclick="sP('${r.id}',${p-1})">−</button><span>${p}</span><button onclick="sP('${r.id}',${p+1})">+</button></div></div>`:''}
     </div>
     <div class="rcard-divider"></div>
     <div class="rcard-expand" onclick="tD('${cid}')"><span>Recept bekijken</span><span class="arr">▼</span></div>
     <div class="rcard-detail" id="d${cid}">
+      <p style="font-size:13px;color:var(--text3);margin-bottom:10px">🍽 ${p} personen</p>
       <h4>Ingrediënten${stepper?' — '+p+' personen':''}</h4><ul>${ings}</ul>
       <h4>Bereiding</h4><ol>${stps}</ol>
       ${r.bron?`<a href="${h(r.bron)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent)">Origineel recept →</a>`:''}
