@@ -1778,6 +1778,17 @@ async function analyseerReceptFoto(){
 function renderFotoPaneel(){
   const busy=S.fotoLaden;
   return`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">📋 Tips voor een goed resultaat</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.8">
+        <li>Zorg voor <strong>voldoende licht</strong> — geen schaduwen over de tekst</li>
+        <li>Houd de camera <strong>recht boven</strong> de pagina</li>
+        <li>Fotografeer de <strong>volledige pagina</strong> inclusief ingrediënten én bereiding</li>
+        <li>Zorg dat de tekst <strong>scherp en leesbaar</strong> is — zoom in indien nodig</li>
+        <li>Vermijd <strong>wazige of scheve</strong> foto's</li>
+      </ul>
+    </div>
+
     <span class="sec-label">📄 Receptfoto (pagina uit kookboek)</span>
     <div class="foto-zone" onclick="document.getElementById('foto-recept-inp').click()">
       <input id="foto-recept-inp" type="file" accept="image/*" onchange="fotoBestandGekozen('recept')">
