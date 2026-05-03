@@ -212,8 +212,10 @@ textarea.inp{resize:vertical}
 .sitem{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:5px;transition:all .15s;background:var(--surface);min-height:48px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .sitem:hover{border-color:var(--border2)}
 .sitem.done{opacity:.5}
+.sitem.checking{opacity:.65}
+.sitem.checking .sname{text-decoration:line-through;color:var(--text3);transition:all .3s}
 .scb{width:22px;height:22px;border-radius:6px;flex-shrink:0;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;transition:all .15s;cursor:pointer;font-size:12px;color:var(--color-bg)}
-.scb.done{border-color:var(--accent);background:var(--accent)}
+.scb.done,.scb.checking{border-color:var(--accent);background:var(--accent)}
 .sname{flex:1;font-size:14px;color:var(--text);cursor:pointer;line-height:1.35}
 .sname.done{text-decoration:line-through;color:var(--text3)}
 .sqty{font-size:13px;color:var(--text2);font-weight:600;white-space:nowrap}
@@ -1429,12 +1431,29 @@ function abonneer(lijstId){
       payload=>{const item=S.shopItems.find(i=>i.sbId===payload.new.id);if(item){item.done=payload.new.is_checked;rIP();}}
     ).subscribe();
 }
+const _shopTimers=new Map();
 function toggleShop(idx){
-  if(S.shopItems[idx]===undefined)return;
-  S.shopItems[idx].done=!S.shopItems[idx].done;
-  const sbId=S.shopItems[idx].sbId;
-  if(sbId)DB.from('shopping_items').update({is_checked:S.shopItems[idx].done}).eq('id',sbId).then(({error})=>{if(error)console.error(error.message);});
-  rIP();
+  const item=S.shopItems[idx];if(!item)return;
+  if(item.done){
+    // Al afgevinkt → direct terugzetten
+    item.done=false;item.checking=false;
+    if(_shopTimers.has(item)){clearTimeout(_shopTimers.get(item));_shopTimers.delete(item);}
+    if(item.sbId)DB.from('shopping_items').update({is_checked:false}).eq('id',item.sbId).then(({error})=>{if(error)console.error(error.message);});
+    rIP();
+  }else if(item.checking){
+    // Klik tijdens wachttijd → annuleren
+    item.checking=false;
+    if(_shopTimers.has(item)){clearTimeout(_shopTimers.get(item));_shopTimers.delete(item);}
+    rIP();
+  }else{
+    // Afvinken: toon doorstreept, wacht 2s, verplaats dan naar afgevinkt
+    item.checking=true;rIP();
+    _shopTimers.set(item,setTimeout(()=>{
+      item.done=true;item.checking=false;_shopTimers.delete(item);
+      if(item.sbId)DB.from('shopping_items').update({is_checked:true}).eq('id',item.sbId).then(({error})=>{if(error)console.error(error.message);});
+      rIP();
+    },2000));
+  }
 }
 function delShop(idx){
   const item=S.shopItems[idx];
@@ -1793,10 +1812,10 @@ function renderBoodschappen(){
           <span class="afd-count">${g.items.length}</span>
         </div>
         ${g.items.map(item=>`
-          <div class="sitem" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
+          <div class="sitem${item.checking?' checking':''}" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
             <span class="sdrag" title="Lang indrukken om te verplaatsen">⠿</span>
-            <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
-            <span class="sname" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
+            <div class="scb${item.checking?' checking':''}" onclick="toggleShop(${item.idx})">${item.checking||item.done?'✓':''}</div>
+            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
             <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
               ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e} ${a.n}</option>`).join('')}
