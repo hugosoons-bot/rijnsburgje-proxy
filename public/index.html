@@ -228,6 +228,14 @@ textarea.inp{resize:vertical}
 .done-section{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:20px}
 .done-section h3{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .done-items{display:flex;flex-direction:column;gap:4px}
+.foto-zone{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:20px;text-align:center;cursor:pointer;transition:border-color .15s;background:var(--surface)}
+.foto-zone:hover{border-color:var(--accent)}
+.foto-zone input{display:none}
+.foto-preview{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--radius);display:block}
+.crop-wrap{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:var(--radius);cursor:crosshair;position:relative;background:#000}
+.crop-img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4px;font-size:12px;font-weight:600}
+.onleesbaar-banner{background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#856404}
 
 /* ── Misc ── */
 .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
@@ -470,6 +478,7 @@ let S={
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
+  fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
@@ -1187,14 +1196,14 @@ Per recept: ${SCHEMA_VELD}
 Keuken: Italiaans,Aziatisch,Mexicaans,Indiaas,Midden-Oosters,Frans,Nederlands,Zoet of leeg.
 Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep of leeg.
 ${SCHEMA_UITLEG}
-REGELS — verplicht:
-1. Lees de afbeelding zorgvuldig van boven naar beneden. Let op meerdere kolommen: lees kolom voor kolom, niet rij voor rij.
-2. Neem ingrediënten en stappen LETTERLIJK over. Geen parafrasering, geen samenvoegen.
-3. Hoeveelheden: als een getal en een eenheid naast een ingredient staan (ook in een aparte kolom), koppel ze correct. Zet hoeveelheid als getal, eenheid als string.
-4. Vage hoeveelheden ("handjevol", "naar smaak", "scheut", "snuf"): zet volledige omschrijving in naam, hoeveelheid=1, eenheid="x".
-5. Onleesbare tekst: schrijf "[ONLEESBAAR]" letterlijk in het veld. Gok nooit.
-6. tijdBereiding en tijdWacht invullen als zichtbaar in de afbeelding, anders 0.
-7. VERIFICATIE voor je de JSON afrondt: is elk ingrediënt aantoonbaar zichtbaar in de afbeelding? Is de volgorde van de stappen correct? Verwijder alles wat je niet zeker weet.
+KRITIEKE REGELS — NOOIT overtreden:
+1. Lees de afbeelding zorgvuldig kolom voor kolom, van boven naar beneden.
+2. Neem ingrediënten en stappen LETTERLIJK over. Geen parafrasering, geen samenvoegen, geen aanvullen.
+3. Hoeveelheden en eenheden exact overnemen zoals zichtbaar.
+4. Vage hoeveelheden ("handjevol","naar smaak","scheut"): volledige omschrijving in naam-veld, hoeveelheid=1, eenheid="x".
+5. ONLEESBAAR — als tekst niet zeker leesbaar is: schrijf precies "[ONLEESBAAR: beschrijving van wat ontbreekt]" in dat veld. GOKKEN IS VERBODEN. Liever een [ONLEESBAAR]-marker dan een fout gegeven.
+6. tijdBereiding en tijdWacht invullen als zichtbaar, anders 0.
+7. VERIFICATIE voor afronden: is elk ingredient aantoonbaar zichtbaar? Is stapvolgorde correct? Verwijder alles wat je niet 100% zeker weet.
 Datum: gebruik DATUM.`;
 
 const SYS_SHOP=`Geef ALLEEN een pure JSON array van strings. Geen uitleg, geen backticks.
@@ -1554,13 +1563,14 @@ function buildCard(r,opts={}){
   const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer,showLike,showAuteur}=opts;
   const sel=S.geselecteerd.includes(r.id);
   const p=pers||r.personen||4;
-  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${h(i.eenheid)}</strong> ${h(i.naam)}</li>`).join('');
-  const stps=(r.stappen||[]).map(s=>`<li>${h(s)}</li>`).join('');
+  function markOL(t){return h(String(t||'')).replace(/\[ONLEESBAAR:[^\]]*\]/g,'<mark class="onleesbaar">⚠ onleesbaar</mark>');}
+  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${markOL(i.eenheid)}</strong> ${markOL(i.naam)}</li>`).join('');
+  const stps=(r.stappen||[]).map(s=>`<li>${markOL(s)}</li>`).join('');
   const cid='c'+r.id.replace(/[^a-z0-9]/gi,'-');
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
     ${sel?'<div class="sel-badge">✓</div>':''}
     <div class="rcard-img">${r.afbeelding
-      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:${r.afbeelding.startsWith('blob:')?'contain':'cover'};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
+      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:cover;object-position:${h(r.afbeeldingPositie||'center')};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
       ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}
       ${showAuteur&&r.auteursNaam?`<div class="rcard-auteur">👤 ${h(r.auteursNaam)}</div>`:''}
@@ -1660,12 +1670,112 @@ function renderRecepten(){
         :`<div class="cards-grid feed-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
+// ── Foto import ───────────────────────────────────────────────────────────────
+async function fileNaarDataUrl(file,maxPx=1600){
+  return new Promise(resolve=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const scale=Math.min(1,maxPx/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',0.85));
+    };img.src=url;
+  });
+}
+async function fotoBestandGekozen(type){
+  const id=type==='recept'?'foto-recept-inp':'foto-eten-inp';
+  const file=document.getElementById(id)?.files?.[0];if(!file)return;
+  const dataUrl=await fileNaarDataUrl(file,type==='recept'?1600:1200);
+  if(type==='recept'){S.fotoReceptPreview=dataUrl;S.fotoResultaatIdx=null;S.fotoFout='';S.resultaten=[];}
+  else{S.fotoEtenPreview=dataUrl;S.fotoCropX=50;S.fotoCropY=50;}
+  rIP();
+}
+function fotoTapCrop(e){
+  const r=e.currentTarget.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  const cy=e.touches?e.touches[0].clientY:e.clientY;
+  S.fotoCropX=Math.round((cx-r.left)/r.width*100);
+  S.fotoCropY=Math.round((cy-r.top)/r.height*100);
+  const img=document.getElementById('crop-img');
+  if(img)img.style.objectPosition=`${S.fotoCropX}% ${S.fotoCropY}%`;
+  // Don't call rIP() to avoid re-render during touch
+}
+function fotoTapCropEnd(){rIP();}
+function telOnleesbaar(r){
+  if(!r)return 0;let n=0;
+  const chk=v=>{if(typeof v==='string'&&v.includes('[ONLEESBAAR'))n++;};
+  chk(r.titel);chk(r.omschrijving);chk(r.notities);
+  (r.ingredienten||[]).forEach(i=>{chk(i.naam);chk(String(i.hoeveelheid));chk(i.eenheid);});
+  (r.stappen||[]).forEach(chk);return n;
+}
+async function analyseerReceptFoto(){
+  if(!S.fotoReceptPreview){S.fotoFout='Upload eerst een receptfoto.';rIP();return;}
+  S.fotoLaden=true;S.fotoFout='';S.resultaten=[];S.fotoOnleesbaar=0;rIP();
+  try{
+    const b64=S.fotoReceptPreview.split(',')[1];
+    const mt=S.fotoReceptPreview.match(/data:([^;]+)/)?.[1]||'image/jpeg';
+    const bronTekst=S.fotoBron?`\nBron/kookboek: ${S.fotoBron}`:'';
+    const msg=[{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+      {type:'text',text:`Extraheer het recept van deze foto.${bronTekst} Gebruik [ONLEESBAAR: omschrijving] voor onleesbare tekst.`}
+    ]}];
+    const parsed=await callAPI(msg,false,3000,SYS_FOTO);
+    if(!Array.isArray(parsed)||!parsed.length)throw new Error('Geen recept herkend in de afbeelding.');
+    const r={...parsed[0]};
+    if(S.fotoBron)r.bron=S.fotoBron;
+    if(S.fotoEtenPreview){r.afbeelding=S.fotoEtenPreview;r.afbeeldingPositie=`${S.fotoCropX}% ${S.fotoCropY}%`;}
+    r.id='foto-'+Date.now();r.opgeslagen=false;r.datum=new Date().toISOString().split('T')[0];
+    S.fotoOnleesbaar=telOnleesbaar(r);
+    S.resultaten=[r];
+  }catch(e){S.fotoFout=e.message;}
+  S.fotoLaden=false;rIP();
+}
+function renderFotoPaneel(){
+  const busy=S.fotoLaden;
+  return`
+    <span class="sec-label">📄 Receptfoto (pagina uit kookboek)</span>
+    <div class="foto-zone" onclick="document.getElementById('foto-recept-inp').click()">
+      <input id="foto-recept-inp" type="file" accept="image/*" onchange="fotoBestandGekozen('recept')">
+      ${S.fotoReceptPreview
+        ?`<img class="foto-preview" src="${S.fotoReceptPreview}" style="margin-bottom:8px"><div style="font-size:12px;color:var(--accent)">Tik om te wijzigen</div>`
+        :`<div style="font-size:28px;margin-bottom:6px">📷</div><div style="font-size:13px;color:var(--text2)">Tik om foto te kiezen</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Of maak een foto van het kookboek</div>`}
+    </div>
+
+    <span class="sec-label" style="margin-top:14px;display:block">📖 Kookboek (optioneel)</span>
+    <input class="inp" placeholder="bijv. Ottolenghi Simple" value="${h(S.fotoBron)}" oninput="S.fotoBron=this.value" style="margin-bottom:14px">
+
+    <span class="sec-label">📸 Foto van het gerecht (optioneel)</span>
+    <div class="foto-zone" onclick="document.getElementById('foto-eten-inp').click()" style="margin-bottom:${S.fotoEtenPreview?'0':'14px'}">
+      <input id="foto-eten-inp" type="file" accept="image/*" onchange="fotoBestandGekozen('eten')">
+      ${S.fotoEtenPreview
+        ?`<img class="foto-preview" src="${S.fotoEtenPreview}"><div style="font-size:12px;color:var(--accent);margin-top:6px">Tik om te wijzigen</div>`
+        :`<div style="font-size:28px;margin-bottom:6px">🍽️</div><div style="font-size:13px;color:var(--text2)">Tik om foto toe te voegen</div>`}
+    </div>
+    ${S.fotoEtenPreview?`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:14px;margin-top:8px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">Tik op de foto om het middelpunt van de uitsnede in te stellen</div>
+      <div class="crop-wrap" id="crop-wrap"
+        onclick="fotoTapCrop(event)"
+        ontouchend="fotoTapCrop(event);fotoTapCropEnd()">
+        <img id="crop-img" class="crop-img" src="${S.fotoEtenPreview}" style="object-position:${S.fotoCropX}% ${S.fotoCropY}%">
+      </div>
+      <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px">Uitsnede: ${S.fotoCropX}% links–rechts · ${S.fotoCropY}% boven–onder</div>
+    </div>`:''}
+
+    ${S.fotoFout?`<div class="box-err" style="margin-bottom:12px">⚠️ ${h(S.fotoFout)}</div>`:''}
+    <button class="btn btn-accent btn-w" onclick="analyseerReceptFoto()" ${busy||!S.fotoReceptPreview?'disabled':''}>
+      ${busy?'<span style="display:flex;align-items:center;justify-content:center;gap:8px"><span class="laad-cirkel" style="width:16px;height:16px;border-width:2px"></span>Recept herkennen...</span>':'📷 Recept herkennen →'}
+    </button>`;
+}
+
 function renderZoeken(){
   const busy=S.laden;
   const tabsBtns=`
     <div class="mode-row" style="margin-bottom:16px">
       <button class="mb${S.ontdekTab==='url'?' on':''}" onclick="S.ontdekTab='url';render()">🔗 URL</button>
       <button class="mb${S.ontdekTab==='tekst'?' on':''}" onclick="S.ontdekTab='tekst';render()">✏️ Tekst</button>
+      <button class="mb${S.ontdekTab==='foto'?' on':''}" onclick="S.ontdekTab='foto';S.fotoFout='';render()">📷 Foto</button>
     </div>`;
 
   let paneel='';
@@ -1684,6 +1794,8 @@ function renderZoeken(){
       <span class="sec-label" style="margin-top:10px;display:block">Bronlink (optioneel)</span>
       <input id="hm-url" class="inp" placeholder="https://..." value="${h(S.handmatigeUrl)}" oninput="S.handmatigeUrl=this.value" style="margin-bottom:12px">
       <button class="btn btn-accent btn-w" onclick="verwerkTekst()" ${busy?'disabled':''}>${busy?'Bezig...':'Recept verwerken →'}</button>`;
+  } else if(S.ontdekTab==='foto'){
+    paneel=renderFotoPaneel();
   }
 
   const foutBlok=S.fout?`
@@ -1706,7 +1818,12 @@ function renderZoeken(){
     ${busy&&!S.resultaten.length?`<div class="laad-wrap"><div class="laad-cirkel"></div><span>Recept ophalen...</span></div>`:''}
     ${S.resultaten.length>0
       ?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden</p><div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
-      :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL of plak tekst om een recept te importeren.</div>':'')}`;
+      :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL of plak tekst om een recept te importeren.</div>':''))}
+    ${S.fotoOnleesbaar>0&&S.resultaten.length>0&&S.ontdekTab==='foto'?`
+    <div class="onleesbaar-banner">
+      ⚠️ <strong>${S.fotoOnleesbaar} ${S.fotoOnleesbaar===1?'veld is':'velden zijn'} niet leesbaar.</strong>
+      Klik op <em>✏️ Wijzig</em> om de gemarkeerde onderdelen zelf in te vullen.
+    </div>`:''}`;
 }
 
 function openKookModal(receptId){
