@@ -814,14 +814,19 @@ async function linkRecipeToDate(recipeId,dateStr){
   const ws=dagWeekStart(dateStr);
   S.receptWeek[recipeId]=S.receptWeek[recipeId]||ws;
   if(ws===S.actieveWeek&&!S.geselecteerd.includes(recipeId))S.geselecteerd.push(recipeId);
+  // Boodschappenlijst meteen bijwerken
+  if(ws===S.actieveWeek){bouwShop();if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();}
   rIP();renderDpkGekozen();
   if(!S.gebruiker)return;
   const mid=await ensureMenuVoorWeek(ws);
   if(!mid)return;
+  if(ws===S.actieveWeek)S.menuId=mid;
   const sv=S.weekPers[recipeId]||S.recepten.find(r=>r.id===recipeId)?.personen||4;
   const dow=new Date(dateStr+'T00:00:00').getDay();
   await DB.from('week_menu_items').delete().eq('menu_id',mid).eq('recipe_id',recipeId).eq('day_of_week',dow);
   await DB.from('week_menu_items').insert({menu_id:mid,recipe_id:recipeId,day_of_week:dow,servings:sv});
+  // Sla boodschappenlijst op met correct menuId
+  if(ws===S.actieveWeek)slaBoodschappenlijstOp();
 }
 async function unlinkRecipeFromDate(recipeId,dateStr){
   const nieuw=(S.receptDagen[recipeId]||[]).filter(d=>d!==dateStr);
@@ -832,11 +837,8 @@ async function unlinkRecipeFromDate(recipeId,dateStr){
     if(ws===S.actieveWeek)S.geselecteerd=S.geselecteerd.filter(x=>x!==recipeId);
     if(!(S.receptDagen[recipeId]||[]).length)delete S.receptWeek[recipeId];
   }
-  // Herberekent boodschappenlijst meteen als die al gebouwd is voor deze week
-  if(ws===S.actieveWeek&&S.shopItems.length>0){
-    bouwShop();
-    if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
-  }
+  // Boodschappenlijst altijd meteen bijwerken voor de actieve week
+  if(ws===S.actieveWeek){bouwShop();if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();}
   rIP();renderDpkGekozen();
   if(!S.gebruiker)return;
   const{data:menu}=await DB.from('week_menus').select('id').eq('user_id',S.gebruiker.id).eq('week_start',ws).maybeSingle();
