@@ -306,6 +306,11 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
 </style>
 </head>
 <body>
+<div id="ptr" style="position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;padding-top:12px;z-index:999;pointer-events:none;opacity:0;transition:opacity .2s">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;box-shadow:var(--shadow)">
+    <span id="ptr-icoon" style="display:inline-block;transition:transform .2s">↓</span> <span id="ptr-tekst">Trek naar beneden</span>
+  </div>
+</div>
 
 <div id="hdr">
   <div id="hdr-inner">
@@ -2757,6 +2762,49 @@ window.addEventListener('DOMContentLoaded',async()=>{
         .catch(err => console.log('❌ SW fout:', err));
     });
   }
+
+  // Pull to refresh
+  let _ptrY=0,_ptrActief=false,_ptrGereed=false;
+  const PTR_DREMPEL=72;
+  function _ptrEl(){return document.getElementById('ptr');}
+  function _ptrIcoon(){return document.getElementById('ptr-icoon');}
+  function _ptrTekst(){return document.getElementById('ptr-tekst');}
+  document.addEventListener('touchstart',e=>{
+    if(window.scrollY===0){_ptrY=e.touches[0].clientY;_ptrActief=true;_ptrGereed=false;}
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!_ptrActief)return;
+    const dy=e.touches[0].clientY-_ptrY;
+    if(dy<=0){_ptrActief=false;_ptrEl().style.opacity=0;return;}
+    const progress=Math.min(dy/PTR_DREMPEL,1);
+    _ptrEl().style.opacity=Math.min(progress*1.5,1);
+    _ptrGereed=dy>=PTR_DREMPEL;
+    _ptrIcoon().style.transform=_ptrGereed?'rotate(180deg)':'rotate(0deg)';
+    _ptrTekst().textContent=_ptrGereed?'Loslaten om te verversen':'Trek naar beneden';
+  },{passive:true});
+  document.addEventListener('touchend',async()=>{
+    if(!_ptrActief)return;
+    _ptrActief=false;
+    const el=_ptrEl();
+    if(!_ptrGereed){el.style.opacity=0;return;}
+    _ptrIcoon().style.transform='';
+    _ptrTekst().textContent='Verversen...';
+    _ptrIcoon().style.animation='ptr-spin 0.7s linear infinite';
+    try{
+      if(typeof loadRecepten==='function')await loadRecepten();
+      if(typeof laadWeekmenu==='function')await laadWeekmenu();
+      if(typeof laadBoodschappen==='function')await laadBoodschappen();
+      if(typeof laadVrienden==='function')await laadVrienden();
+      if(typeof laadPubliekeRecepten==='function')await laadPubliekeRecepten();
+      if(typeof render==='function')render();
+    }finally{
+      _ptrIcoon().style.animation='';
+      el.style.opacity=0;
+    }
+  });
 </script>
+<style>
+  @keyframes ptr-spin{to{transform:rotate(360deg)}}
+</style>
 </body>
 </html>
