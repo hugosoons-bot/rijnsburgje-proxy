@@ -343,15 +343,16 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
       <input id="m-titel" class="inp" placeholder="Naam van het recept" style="margin-bottom:12px">
       <span class="sec-label">Omschrijving</span>
       <input id="m-omschr" class="inp" placeholder="Korte omschrijving (1 zin)" style="margin-bottom:12px">
+      <div style="margin-bottom:16px">
+        <span class="sec-label">Personen</span>
+        <input id="m-pers" class="inp" type="number" min="1" max="50" placeholder="4" style="max-width:120px">
+      </div>
+      <span class="sec-label">Foto</span>
+      <div id="m-img-preview" style="margin-bottom:6px"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <div style="flex:1">
-          <span class="sec-label">Personen</span>
-          <input id="m-pers" class="inp" type="number" min="1" max="50" placeholder="4">
-        </div>
-        <div style="flex:1">
-          <span class="sec-label">Afbeelding URL</span>
-          <input id="m-img" class="inp" placeholder="https://...">
-        </div>
+        <input id="m-img" class="inp" placeholder="Afbeelding URL (optioneel)" style="flex:1;font-size:11px">
+        <button class="btn btn-light" onclick="document.getElementById('m-img-inp').click()" style="white-space:nowrap;flex-shrink:0">📷 Upload</button>
+        <input id="m-img-inp" type="file" accept="image/*" capture="environment" style="display:none" onchange="modalFotoGekozen(this)">
       </div>
       <span class="sec-label">Keuken</span>
       <div id="m-k" style="display:flex;flex-wrap:wrap;margin-bottom:16px"></div>
@@ -1113,7 +1114,7 @@ function openEdit(id){
   document.getElementById('m-titel').value=r.titel||'';
   document.getElementById('m-omschr').value=r.omschrijving||'';
   document.getElementById('m-pers').value=r.personen||4;
-  document.getElementById('m-img').value=r.afbeelding||'';
+  document.getElementById('m-img').value=r.afbeelding||'';updateMImgPreview(r.afbeelding||'');
   document.getElementById('m-n').value=r.notities||'';
   document.getElementById('m-tb').value=r.tijdBereiding||'';
   document.getElementById('m-tw').value=r.tijdWacht||'';
@@ -1133,7 +1134,7 @@ function openEditResultaat(idx){
   document.getElementById('m-titel').value=r.titel||'';
   document.getElementById('m-omschr').value=r.omschrijving||'';
   document.getElementById('m-pers').value=r.personen||4;
-  document.getElementById('m-img').value=r.afbeelding||'';
+  document.getElementById('m-img').value=r.afbeelding||'';updateMImgPreview(r.afbeelding||'');
   document.getElementById('m-n').value=r.notities||'';
   document.getElementById('m-tb').value=r.tijdBereiding||'';
   document.getElementById('m-tw').value=r.tijdWacht||'';
@@ -1188,6 +1189,17 @@ async function saveModal(){
   leesVelden(r);sluitModal();render();await savRecept(r);
 }
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;S.editResultIdx=null;}
+function updateMImgPreview(src){
+  const el=document.getElementById('m-img-preview');if(!el)return;
+  el.innerHTML=src?`<img src="${src}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius);margin-bottom:4px" onerror="this.style.display='none'">`:'';
+}
+async function modalFotoGekozen(input){
+  const file=input.files[0];if(!file)return;
+  const dataUrl=await fileNaarDataUrl(file,1200);
+  document.getElementById('m-img').value=dataUrl;
+  updateMImgPreview(dataUrl);
+  input.value='';
+}
 function closeOvl(e){if(e.target===document.getElementById('mov'))sluitModal();}
 
 // ── API — robust JSON extraction ──────────────────────────────────────────────
