@@ -1818,7 +1818,7 @@ function renderZoeken(){
     ${busy&&!S.resultaten.length?`<div class="laad-wrap"><div class="laad-cirkel"></div><span>Recept ophalen...</span></div>`:''}
     ${S.resultaten.length>0
       ?`<p style="font-size:12px;color:var(--text3);margin-bottom:12px">${S.resultaten.length} recept${S.resultaten.length===1?'':'en'} gevonden</p><div class="cards-grid">${S.resultaten.map((r,i)=>buildCard(r,{op:true,idx:i})).join('')}</div>`
-      :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL of plak tekst om een recept te importeren.</div>':''))}
+      :(!busy&&(S.ontdekTab==='url'||S.ontdekTab==='tekst')&&!S.fout?'<div class="hint">Plak een URL of plak tekst om een recept te importeren.</div>':'')}
     ${S.fotoOnleesbaar>0&&S.resultaten.length>0&&S.ontdekTab==='foto'?`
     <div class="onleesbaar-banner">
       ⚠️ <strong>${S.fotoOnleesbaar} ${S.fotoOnleesbaar===1?'veld is':'velden zijn'} niet leesbaar.</strong>
