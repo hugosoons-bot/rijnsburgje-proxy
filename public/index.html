@@ -321,9 +321,9 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     <div id="hdr-sub">laden...</div>
     <nav id="tabs" role="tablist" aria-label="Navigatie">
       <button class="tb on" role="tab" aria-selected="true" onclick="setTab('recepten')">Recepten</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg" style="display:none"></span></button>
     </nav>
   </div>
@@ -2605,7 +2605,7 @@ function render(){
   hdr.style.display='';
   const naam=S.profiel?.display_name||S.gebruiker?.email||'';
   document.getElementById('hdr-sub').innerHTML=`<span onclick="setTab('profiel')" style="text-decoration:underline;cursor:pointer;text-underline-offset:2px">${h(naam)}</span> &middot; ${S.recepten.length} recepten`;
-  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','vrienden','weekmenu','boodschappen','meldingen'][i]===S.tab));
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','weekmenu','boodschappen','vrienden','meldingen'][i]===S.tab));
   const bdg=document.getElementById('meld-bdg');
   if(bdg){if(S.meldBadge>0){bdg.textContent=S.meldBadge;bdg.style.display='inline';}else bdg.style.display='none';}
   let html='';
