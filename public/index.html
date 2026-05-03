@@ -1168,6 +1168,17 @@ function rMStps(){
     </div>`).join('');
 }
 function addMStap(){S.mStps.push('');rMStps();setTimeout(()=>{const rows=document.querySelectorAll('#m-stps textarea');if(rows.length)rows[rows.length-1].focus();},50);}
+async function uploadReceptFoto(dataUrl,receptId){
+  try{
+    const res=await fetch(dataUrl);
+    const blob=await res.blob();
+    const pad=`${S.gebruiker.id}/${receptId}.jpg`;
+    const{error}=await DB.storage.from('recipe-images').upload(pad,blob,{contentType:'image/jpeg',upsert:true});
+    if(error)return null;
+    const{data}=DB.storage.from('recipe-images').getPublicUrl(pad);
+    return data.publicUrl;
+  }catch(e){return null;}
+}
 async function saveModal(){
   function leesVelden(r){
     r.titel=document.getElementById('m-titel').value.trim()||r.titel;
@@ -1186,7 +1197,13 @@ async function saveModal(){
     leesVelden(r);sluitModal();render();return;
   }
   const r=S.recepten.find(x=>x.id===S.editId);if(!r)return;
-  leesVelden(r);sluitModal();render();await savRecept(r);
+  leesVelden(r);
+  if(r.afbeelding&&r.afbeelding.startsWith('data:')){
+    const url=await uploadReceptFoto(r.afbeelding,r.id);
+    if(url){r.afbeelding=url;document.getElementById('m-img')&&(document.getElementById('m-img').value=url);}
+    else{S.fout='Foto opslaan mislukt — maak bucket "recipe-images" aan in Supabase Storage (publiek).';render();return;}
+  }
+  sluitModal();render();await savRecept(r);
 }
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;S.editResultIdx=null;}
 function updateMImgPreview(src){
