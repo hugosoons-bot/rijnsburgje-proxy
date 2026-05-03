@@ -678,8 +678,9 @@ function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken]
 function localeDateStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function getMaandag(){
   const d=new Date();
-  const sun=new Date(d.getFullYear(),d.getMonth(),d.getDate()-d.getDay());
-  return localeDateStr(sun);
+  const day=d.getDay(); // 0=zo,1=ma,...,6=za
+  const diff=day===0?1:1-day; // zondag→volgende maandag; anders→huidige maandag
+  return localeDateStr(new Date(d.getFullYear(),d.getMonth(),d.getDate()+diff));
 }
 function getVolgendeWeek(){
   const d=new Date(getMaandag()+'T00:00:00');
