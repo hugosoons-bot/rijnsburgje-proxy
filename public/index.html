@@ -738,7 +738,7 @@ async function laadWeekmenu(){
     (items||[]).forEach(i=>{
       if(i.servings)S.weekPers[i.recipe_id]=i.servings;
       if(i.day_of_week!=null){
-        const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
+        const d=new Date(S.actieveWeek+'T00:00:00');d.setDate(d.getDate()+(i.day_of_week+6)%7);
         const ds=localeDateStr(d);
         if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
         if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
@@ -763,7 +763,7 @@ async function laadAlleWeekMenus(){
   (items||[]).forEach(i=>{
     const ws=weekMap[i.menu_id];S.receptWeek[i.recipe_id]=ws;
     if(i.day_of_week!=null){
-      const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+i.day_of_week);
+      const d=new Date(ws+'T00:00:00');d.setDate(d.getDate()+(i.day_of_week+6)%7);
       const ds=localeDateStr(d);
       if(!S.receptDagen[i.recipe_id])S.receptDagen[i.recipe_id]=[];
       if(!S.receptDagen[i.recipe_id].includes(ds))S.receptDagen[i.recipe_id].push(ds);
@@ -831,6 +831,11 @@ async function unlinkRecipeFromDate(recipeId,dateStr){
   if(!nogInWeek){
     if(ws===S.actieveWeek)S.geselecteerd=S.geselecteerd.filter(x=>x!==recipeId);
     if(!(S.receptDagen[recipeId]||[]).length)delete S.receptWeek[recipeId];
+  }
+  // Herberekent boodschappenlijst meteen als die al gebouwd is voor deze week
+  if(ws===S.actieveWeek&&S.shopItems.length>0){
+    bouwShop();
+    if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
   }
   rIP();renderDpkGekozen();
   if(!S.gebruiker)return;
