@@ -219,7 +219,7 @@ textarea.inp{resize:vertical}
 .sqty{font-size:13px;color:var(--text2);font-weight:600;white-space:nowrap}
 .sdel{background:transparent;border:none;color:var(--border2);font-size:14px;padding:4px 6px;cursor:pointer;transition:color .15s;flex-shrink:0}
 .sdel:hover{color:var(--red)}
-.sdrag{font-size:14px;color:var(--border2);cursor:grab;flex-shrink:0;user-select:none;padding:0 2px;touch-action:none}
+.sdrag{font-size:14px;color:var(--border2);cursor:grab;flex-shrink:0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;padding:0 6px;touch-action:none}
 .afd-sel{border:1px solid var(--border);background:var(--surface2);font-size:13px;cursor:pointer;padding:2px 4px;border-radius:6px;flex-shrink:0;max-width:150px;color:var(--text)}
 .afd-group.drag-over{outline:2px dashed var(--accent);outline-offset:4px;border-radius:var(--radius)}
 .sitem.dragging{opacity:.5;box-shadow:0 4px 14px rgba(0,0,0,.18);transform:scale(1.02);z-index:10;position:relative}
@@ -1726,30 +1726,14 @@ function dragOverAfd(el){el.classList.add('drag-over');}
 function dragLeaveAfd(el){el.classList.remove('drag-over');}
 function dropOnAfd(el,afd){el.classList.remove('drag-over');if(dragShopIdx===null)return;moveShopAfd(dragShopIdx,afd);dragShopIdx=null;}
 
-// Touch drag (long press op ⠿ handle → slepen naar andere categorie)
-let tDragIdx=null,tDragTimer=null,tDragActive=false,tOverAfd=null;
-function shopTouchStart(e,idx){
-  tDragTimer=setTimeout(()=>{
-    tDragActive=true;tDragIdx=idx;
-    e.target.closest('.sitem')?.classList.add('dragging');
-    navigator.vibrate&&navigator.vibrate(30);
-  },400);
-}
-function shopTouchMove(e){
-  if(!tDragActive){clearTimeout(tDragTimer);tDragTimer=null;return;}
-  e.preventDefault();
-  const t=e.touches[0];
-  document.querySelectorAll('.afd-group.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  const under=document.elementFromPoint(t.clientX,t.clientY);
-  const grp=under?.closest('.afd-group');
-  if(grp){grp.classList.add('drag-over');tOverAfd=grp.dataset.afd;}else{tOverAfd=null;}
-}
-function shopTouchEnd(e){
+// Touch drag — via event delegation met passive:false (zie DOMContentLoaded)
+let tDragIdx=null,tDragTimer=null,tDragActive=false,tOverAfd=null,tDragEl=null;
+function _tDragCleanup(drop){
   clearTimeout(tDragTimer);tDragTimer=null;
-  document.querySelectorAll('.sitem.dragging').forEach(el=>el.classList.remove('dragging'));
+  if(tDragEl)tDragEl.classList.remove('dragging');
   document.querySelectorAll('.afd-group.drag-over').forEach(el=>el.classList.remove('drag-over'));
-  if(tDragActive&&tOverAfd!==null&&tDragIdx!==null)moveShopAfd(tDragIdx,tOverAfd);
-  tDragActive=false;tDragIdx=null;tOverAfd=null;
+  if(drop&&tDragActive&&tOverAfd!==null&&tDragIdx!==null)moveShopAfd(tDragIdx,tOverAfd);
+  tDragActive=false;tDragIdx=null;tOverAfd=null;tDragEl=null;
 }
 
 function moveShopAfd(idx,afd){
@@ -1809,8 +1793,8 @@ function renderBoodschappen(){
           <span class="afd-count">${g.items.length}</span>
         </div>
         ${g.items.map(item=>`
-          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})" ontouchmove="shopTouchMove(event)" ontouchend="shopTouchEnd(event)">
-            <span class="sdrag" title="Lang indrukken om te verplaatsen" ontouchstart="shopTouchStart(event,${item.idx})">⠿</span>
+          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})">
+            <span class="sdrag" data-idx="${item.idx}" title="Lang indrukken om te verplaatsen">⠿</span>
             <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
             <span class="sname" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
@@ -2296,6 +2280,32 @@ function rIP(){
   if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,se);}catch(e){}}}
 }
 window.addEventListener('DOMContentLoaded',async()=>{
+  // Touch drag — passive:false zodat preventDefault() werkt (tekst-selectie blokkeren)
+  document.addEventListener('touchstart',e=>{
+    const handle=e.target.closest('.sdrag');
+    if(!handle)return;
+    e.preventDefault();
+    const idx=parseInt(handle.dataset.idx);
+    tDragEl=handle.closest('.sitem');
+    tDragTimer=setTimeout(()=>{
+      tDragActive=true;tDragIdx=idx;
+      tDragEl?.classList.add('dragging');
+      navigator.vibrate&&navigator.vibrate(30);
+    },400);
+  },{passive:false});
+  document.addEventListener('touchmove',e=>{
+    if(tDragTimer&&!tDragActive){clearTimeout(tDragTimer);tDragTimer=null;return;}
+    if(!tDragActive)return;
+    e.preventDefault();
+    const t=e.touches[0];
+    document.querySelectorAll('.afd-group.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    const under=document.elementFromPoint(t.clientX,t.clientY);
+    const grp=under?.closest('.afd-group');
+    if(grp){grp.classList.add('drag-over');tOverAfd=grp.dataset.afd;}else{tOverAfd=null;}
+  },{passive:false});
+  document.addEventListener('touchend',()=>_tDragCleanup(true));
+  document.addEventListener('touchcancel',()=>_tDragCleanup(false));
+
   const params=new URLSearchParams(window.location.search);
   if(params.get('volg'))pendingVolgId=params.get('volg');
   render();
