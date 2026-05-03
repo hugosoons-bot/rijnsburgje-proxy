@@ -786,8 +786,9 @@ function formatDagKort(dateStr){
 function dagWeekStart(dateStr){
   const p=dateStr.split('-');
   const d=new Date(+p[0],+p[1]-1,+p[2]);
-  const sun=new Date(+p[0],+p[1]-1,+p[2]-d.getDay());
-  return`${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`;
+  const diff=(d.getDay()+6)%7; // dagen sinds maandag (ma=0,...,zo=6)
+  const mon=new Date(+p[0],+p[1]-1,+p[2]-diff);
+  return`${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
 }
 
 // ── Data layer ────────────────────────────────────────────────────────────────
@@ -1691,13 +1692,13 @@ function renderKookBody(){
 }
 function renderWeekmenu(){
   const aw=S.actieveWeek||getMaandag();
-  const dagNamen=['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
+  const dagNamen=['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
   const perDag=getRecipesForWeek(aw);
   const totaal=Object.values(perDag).reduce((s,a)=>s+a.length,0);
   const dagRijen=dagNamen.map((naam,i)=>{
     const d=new Date(aw+'T00:00:00');d.setDate(d.getDate()+i);
     const ds=localeDateStr(d);
-    const recepten=perDag[i]||[];
+    const recepten=perDag[d.getDay()]||[];
     const receptHTML=recepten.map(r=>`<div class="dag-recept-item">
         <div style="cursor:pointer;flex:1;min-width:0" onclick="openKookModal('${r.id}')">
           <div class="dag-recept-naam">${h(r.titel)} <span style="font-size:11px;color:var(--accent)">→</span></div>
