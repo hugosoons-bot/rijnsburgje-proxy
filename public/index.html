@@ -1452,7 +1452,7 @@ function toggleShop(idx){
       item.done=true;item.checking=false;_shopTimers.delete(item);
       if(item.sbId)DB.from('shopping_items').update({is_checked:true}).eq('id',item.sbId).then(({error})=>{if(error)console.error(error.message);});
       rIP();
-    },2000));
+    },1000));
   }
 }
 function delShop(idx){
