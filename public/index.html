@@ -1383,9 +1383,27 @@ async function herlaadBoodschappen(lijstId){
   if(!data)return;
   S.shopItems=data.map(i=>{
     const m=(i.amount||'').match(/^([\d.]+)\s*(.*)$/);
-    return{naam:i.name,hoeveelheid:m?parseFloat(m[1]):1,eenheid:m?(m[2]||'').trim():'',done:i.is_checked,extra:i.sort_order>=1000,afd:i.department||'Overig',sbId:i.id};
+    const item={naam:i.name,hoeveelheid:m?parseFloat(m[1]):1,eenheid:m?(m[2]||'').trim():'',done:i.is_checked,extra:i.sort_order>=1000,afd:i.department||'Overig',sbId:i.id};
+    if(S.vasteBoodschappen.some(vb=>vb.naam.toLowerCase()===i.name.toLowerCase()))item.vast=true;
+    return item;
   });
   S.extraItems=S.shopItems.filter(i=>i.extra);
+  // Injecteer vaste boodschappen die ontbreken (bijv. na terugkeer naar een oude week)
+  const bestaand=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
+  const toVoegen=S.vasteBoodschappen.filter(vb=>!bestaand.has(vb.naam.toLowerCase()));
+  if(toVoegen.length){
+    const rijen=toVoegen.map((vb,i)=>({
+      list_id:lijstId,name:vb.naam,
+      amount:`${vb.hoeveelheid}${vb.eenheid?' '+vb.eenheid:''}`,
+      department:vb.afd||getAfd(vb.naam),is_checked:false,
+      sort_order:1000+S.extraItems.length+i,
+    }));
+    const{data:inserted}=await DB.from('shopping_items').insert(rijen).select('id');
+    toVoegen.forEach((vb,i)=>{
+      const item={...vb,extra:true,vast:true,done:false,sbId:inserted?.[i]?.id};
+      S.extraItems.push(item);S.shopItems.push(item);
+    });
+  }
   rIP();
 }
 async function laadBoodschappen(){
@@ -1806,7 +1824,7 @@ function moveShopAfd(idx,afd){
   rIP();
 }
 function renderBoodschappen(){
-  if(S.shopItems.length===0&&S.geselecteerd.length>0)bouwShop();
+  if(S.shopItems.length===0&&(S.geselecteerd.length>0||S.vasteBoodschappen.length>0))bouwShop();
 
   const actief=S.shopItems.filter(i=>!i.done);
   const done=S.shopItems.filter(i=>i.done);
