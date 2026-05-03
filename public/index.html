@@ -2195,13 +2195,20 @@ function renderVrienden(){
       :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">Geen recepten gevonden voor deze filters.</div>'}</div>`;
 
   return`
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:${S.ikVolg.length>0?'12':'16'}px">
       <div style="font-size:13px;color:var(--text3)">${S.publiekeRecepten.length||''} recepten van vrienden</div>
       <button class="btn btn-accent" onclick="S.vriendenSubTab='beheer';rIP()" style="white-space:nowrap;flex-shrink:0">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Toevoegen
       </button>
     </div>
+    ${S.ikVolg.length>0?`<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;margin-bottom:16px;scrollbar-width:none">
+      ${S.ikVolg.map(p=>`<div onclick="openVriendProfiel('${p.id}')" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;min-width:54px">
+        <div class="friend-avatar" style="width:46px;height:46px;font-size:18px">${(p.display_name||'?')[0].toUpperCase()}</div>
+        <span style="font-size:10px;color:var(--text3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.display_name)}</span>
+      </div>`).join('')}
+    </div>`:''}
+
     ${S.ikVolg.length>0&&S.feedMenus.length>0?`
       <div style="margin-bottom:20px">
         <span class="sec-label">Weekmenu van vrienden</span>
