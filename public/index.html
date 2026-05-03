@@ -1015,6 +1015,7 @@ async function laadFeedMenus(){
 // ── Mutations ─────────────────────────────────────────────────────────────────
 function setTab(t){
   S.tab=t;S.fout='';
+  try{localStorage.setItem(SK+'-tab',t);}catch(e){}
   if(t==='vrienden'){S.vriendenSubTab=null;laadVrienden();laadPubliekeRecepten();}
   document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'recepten',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'vrienden',profiel:'profiel'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
   render();
@@ -2333,6 +2334,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
 
   const params=new URLSearchParams(window.location.search);
   if(params.get('volg'))pendingVolgId=params.get('volg');
+  try{const t=localStorage.getItem(SK+'-tab');if(t&&['recepten','weekmenu','boodschappen','vrienden','profiel'].includes(t))S.tab=t;}catch(e){}
   render();
   const{data:{session}}=await DB.auth.getSession();
   if(session){
