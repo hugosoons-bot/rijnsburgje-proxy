@@ -485,7 +485,7 @@ let S={
   vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
-  weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},
+  weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -699,6 +699,11 @@ function getMaandag(){
 function getVolgendeWeek(){
   const d=new Date(getMaandag()+'T00:00:00');
   d.setDate(d.getDate()+7);
+  return localeDateStr(d);
+}
+function getVorigeWeek(){
+  const d=new Date(getMaandag()+'T00:00:00');
+  d.setDate(d.getDate()-7);
   return localeDateStr(d);
 }
 function formatMaandag(dateStr){
@@ -1018,10 +1023,20 @@ async function toggleWeekMenuPubliek(){
   rIP();
 }
 async function laadFeedMenus(){
-  if(!S.gebruiker||!S.ikVolg.length){S.feedMenus=[];return;}
+  if(!S.gebruiker||!S.ikVolg.length){S.feedMenus=[];S.vriendenWekenMap={};return;}
   const volgIds=S.ikVolg.map(p=>p.id);
-  const{data:menus}=await DB.from('week_menus').select('id,user_id').in('user_id',volgIds).eq('is_public',true).eq('week_start',getMaandag());
-  if(!menus||!menus.length){S.feedMenus=[];rIP();return;}
+  const dezeWeek=getMaandag(),vorigeWeek=getVorigeWeek(),volgendeWeek=getVolgendeWeek();
+  const{data:alleMenus}=await DB.from('week_menus').select('id,user_id,week_start')
+    .in('user_id',volgIds).eq('is_public',true).in('week_start',[vorigeWeek,dezeWeek,volgendeWeek]);
+  S.vriendenWekenMap={};
+  (alleMenus||[]).forEach(m=>{
+    if(!S.vriendenWekenMap[m.user_id])S.vriendenWekenMap[m.user_id]=[];
+    if(m.week_start===vorigeWeek)S.vriendenWekenMap[m.user_id].push('vorige week');
+    if(m.week_start===dezeWeek)S.vriendenWekenMap[m.user_id].push('deze week');
+    if(m.week_start===volgendeWeek)S.vriendenWekenMap[m.user_id].push('volgende week');
+  });
+  const menus=(alleMenus||[]).filter(m=>m.week_start===dezeWeek);
+  if(!menus.length){S.feedMenus=[];rIP();return;}
   const profielMap={};S.ikVolg.forEach(p=>profielMap[p.id]=p.display_name);
   const resultaten=await Promise.all(menus.map(async menu=>{
     const{data:items}=await DB.from('week_menu_items')
@@ -2094,15 +2109,32 @@ function renderVrienden(){
         </div>
       </div>
       ${vp.laden?'<div class="hint">Laden...</div>':`
-        <span class="sec-label">Zij volgen (${vp.volgend.length})</span>
-        ${vp.volgend.length===0?'<div class="hint">Volgt nog niemand.</div>':vp.volgend.map(p=>{
-          if(p.id===S.gebruiker?.id)return`<div class="friend-row"><div class="friend-avatar">${(p.display_name||'?')[0].toUpperCase()}</div><span class="friend-name">${h(p.display_name)}</span><span style="font-size:12px;color:var(--text3)">Dat ben jij</span></div>`;
-          return`<div class="friend-row">
-            <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
-            <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
-            ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
-          </div>`;
-        }).join('')}`}`;
+        ${[['vorige week','vorige'],['deze week','deze'],['volgende week','volgende']].map(([label,key])=>`
+          <div style="margin-bottom:18px">
+            <span class="sec-label">${label}</span>
+            ${(vp.weken[key]||[]).length===0
+              ?`<div class="hint" style="font-size:12px">Geen recepten ingepland</div>`
+              :`<div style="display:flex;flex-direction:column;gap:6px">${vp.weken[key].map(r=>`
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)">
+                  ${r.afbeelding?`<img src="${h(r.afbeelding)}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">`:'<span style="font-size:22px;flex-shrink:0">${getEmoji(r)}</span>'}
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.titel)}</div>
+                    ${r.keuken?`<div style="font-size:11px;color:var(--text3)">${h(r.keuken)}</div>`:''}
+                  </div>
+                  <button class="btn btn-dark" style="font-size:11px;padding:4px 8px;flex-shrink:0" onclick="kopieerPubliek('${r.id}')">Kopieer</button>
+                </div>`).join('')}</div>`}
+          </div>`).join('')}
+        <div style="margin-top:4px">
+          <span class="sec-label">Zij volgen (${vp.volgend.length})</span>
+          ${vp.volgend.length===0?'<div class="hint">Volgt nog niemand.</div>':vp.volgend.map(p=>{
+            if(p.id===S.gebruiker?.id)return`<div class="friend-row"><div class="friend-avatar">${(p.display_name||'?')[0].toUpperCase()}</div><span class="friend-name">${h(p.display_name)}</span><span style="font-size:12px;color:var(--text3)">Dat ben jij</span></div>`;
+            return`<div class="friend-row">
+              <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
+              <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
+              ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+            </div>`;
+          }).join('')}
+        </div>`}`;
   }
 
   function friendRow(p,showOntvolg,showTerug){
@@ -2203,10 +2235,14 @@ function renderVrienden(){
       </button>
     </div>
     ${S.ikVolg.length>0?`<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;margin-bottom:16px;scrollbar-width:none">
-      ${S.ikVolg.map(p=>`<div onclick="openVriendProfiel('${p.id}')" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;min-width:54px">
-        <div class="friend-avatar" style="width:46px;height:46px;font-size:18px">${(p.display_name||'?')[0].toUpperCase()}</div>
-        <span style="font-size:10px;color:var(--text3);text-align:center;max-width:54px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.display_name)}</span>
-      </div>`).join('')}
+      ${S.ikVolg.map(p=>{
+        const weken=S.vriendenWekenMap[p.id]||[];
+        return`<div onclick="openVriendProfiel('${p.id}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:58px">
+          <div class="friend-avatar" style="width:46px;height:46px;font-size:18px">${(p.display_name||'?')[0].toUpperCase()}</div>
+          <span style="font-size:10px;color:var(--text3);text-align:center;max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.display_name)}</span>
+          ${weken.length?`<span style="font-size:9px;color:var(--accent);text-align:center;line-height:1.4;max-width:58px">${weken.join('<br>')}</span>`:''}
+        </div>`;
+      }).join('')}
     </div>`:''}
 
     ${S.ikVolg.length>0&&S.feedMenus.length>0?`
@@ -2286,15 +2322,30 @@ function laadMeldingen(){
   S.meldBadge=S.volgers.filter(p=>!gezien.has(p.id)).length;
 }
 async function openVriendProfiel(id){
-  S.vriendenProfiel={id,display_name:'',bio:'',volgend:[],laden:true};
+  S.vriendenProfiel={id,display_name:'',bio:'',volgend:[],weken:{vorige:[],deze:[],volgende:[]},laden:true};
   rIP();
-  const[{data:prof},{data:volgend}]=await Promise.all([
+  const dezeWeek=getMaandag(),vorigeWeek=getVorigeWeek(),volgendeWeek=getVolgendeWeek();
+  const[{data:prof},{data:volgend},{data:wkMenus}]=await Promise.all([
     DB.from('profiles').select('id,display_name,bio').eq('id',id).single(),
     DB.from('follows').select('following_id').eq('follower_id',id),
+    DB.from('week_menus').select('id,week_start').eq('user_id',id).eq('is_public',true).in('week_start',[vorigeWeek,dezeWeek,volgendeWeek]),
   ]);
   const volgIds=(volgend||[]).map(r=>r.following_id);
-  const{data:volgProf}=volgIds.length>0?await DB.from('profiles').select('id,display_name').in('id',volgIds):{data:[]};
-  S.vriendenProfiel={id,display_name:prof?.display_name||'',bio:prof?.bio||'',volgend:volgProf||[],laden:false};
+  const wkMenuIds=(wkMenus||[]).map(m=>m.id);
+  const[{data:volgProf},{data:wkItems}]=await Promise.all([
+    volgIds.length>0?DB.from('profiles').select('id,display_name').in('id',volgIds):Promise.resolve({data:[]}),
+    wkMenuIds.length>0?DB.from('week_menu_items').select('menu_id,recipes(id,title,description,image_url,cuisine,category,tags,servings,source_url,ingredients,instructions,is_public,user_id)').in('menu_id',wkMenuIds):Promise.resolve({data:[]}),
+  ]);
+  const weekMap={};(wkMenus||[]).forEach(m=>weekMap[m.id]=m.week_start);
+  const weken={vorige:[],deze:[],volgende:[]};
+  (wkItems||[]).forEach(i=>{
+    if(!i.recipes)return;
+    const ws=weekMap[i.menu_id];const r=fromSB(i.recipes);
+    if(ws===vorigeWeek&&!weken.vorige.find(x=>x.id===r.id))weken.vorige.push(r);
+    if(ws===dezeWeek&&!weken.deze.find(x=>x.id===r.id))weken.deze.push(r);
+    if(ws===volgendeWeek&&!weken.volgende.find(x=>x.id===r.id))weken.volgende.push(r);
+  });
+  S.vriendenProfiel={id,display_name:prof?.display_name||'',bio:prof?.bio||'',volgend:volgProf||[],weken,laden:false};
   rIP();
 }
 async function opslaanNaam(){
