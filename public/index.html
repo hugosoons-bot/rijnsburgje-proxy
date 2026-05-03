@@ -1825,6 +1825,19 @@ function moveShopAfd(idx,afd){
 }
 function renderBoodschappen(){
   if(S.shopItems.length===0&&(S.geselecteerd.length>0||S.vasteBoodschappen.length>0))bouwShop();
+  // Garandeer dat vaste boodschappen altijd aanwezig zijn, ongeacht hoe de lijst geladen is
+  else if(S.vasteBoodschappen.length>0){
+    const aanwezig=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
+    const toVoegen=S.vasteBoodschappen.filter(vb=>!aanwezig.has(vb.naam.toLowerCase()));
+    if(toVoegen.length){
+      toVoegen.forEach(vb=>{
+        const item={...vb,extra:true,vast:true,done:false};
+        S.extraItems.push(item);S.shopItems.push(item);
+      });
+      // Sla direct op zodat volgende laad ook de vaste items bevat
+      if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
+    }
+  }
 
   const actief=S.shopItems.filter(i=>!i.done);
   const done=S.shopItems.filter(i=>i.done);
