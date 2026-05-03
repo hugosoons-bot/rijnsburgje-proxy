@@ -1225,9 +1225,8 @@ async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
   if(search)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const resp=await fetch('/api/gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!resp.ok){
-    if(resp.status===429)throw new Error('Te veel verzoeken — wacht even en probeer opnieuw');
     try{const e=await resp.json();throw new Error(e?.error?.message||'API fout: '+resp.status);}
-    catch(e2){if(e2.message!=='API fout: '+resp.status&&!e2.message.startsWith('JSON'))throw e2;throw new Error('API fout: '+resp.status);}
+    catch(e2){if(e2.message!==('API fout: '+resp.status)&&!e2.message.startsWith('JSON'))throw e2;throw new Error('API fout: '+resp.status);}
   }
   const data=await resp.json();
   if(data.error)throw new Error(data.error.message||'API fout');
