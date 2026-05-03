@@ -209,7 +209,7 @@ textarea.inp{resize:vertical}
 .afd-title{font-weight:700;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.07em}
 .afd-line{flex:1;height:1px;background:var(--border)}
 .afd-count{font-size:11px;color:var(--text3)}
-.sitem{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:5px;transition:all .15s;background:var(--surface);min-height:48px}
+.sitem{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:5px;transition:all .15s;background:var(--surface);min-height:48px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .sitem:hover{border-color:var(--border2)}
 .sitem.done{opacity:.5}
 .scb{width:22px;height:22px;border-radius:6px;flex-shrink:0;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;transition:all .15s;cursor:pointer;font-size:12px;color:var(--color-bg)}
@@ -1793,8 +1793,8 @@ function renderBoodschappen(){
           <span class="afd-count">${g.items.length}</span>
         </div>
         ${g.items.map(item=>`
-          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})">
-            <span class="sdrag" data-idx="${item.idx}" title="Lang indrukken om te verplaatsen">⠿</span>
+          <div class="sitem" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
+            <span class="sdrag" title="Lang indrukken om te verplaatsen">⠿</span>
             <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
             <span class="sname" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
@@ -2282,17 +2282,18 @@ function rIP(){
 window.addEventListener('DOMContentLoaded',async()=>{
   // Touch drag — passive:false zodat preventDefault() werkt (tekst-selectie blokkeren)
   document.addEventListener('touchstart',e=>{
-    const handle=e.target.closest('.sdrag');
-    if(!handle)return;
-    e.preventDefault();
-    const idx=parseInt(handle.dataset.idx);
-    tDragEl=handle.closest('.sitem');
+    const sitem=e.target.closest('.sitem');
+    if(!sitem)return;
+    // Niet activeren op knoppen, checkbox, select — die moeten normaal tikken
+    if(e.target.closest('.scb,.sdel,.afd-sel,button,select,input'))return;
+    const idx=parseInt(sitem.dataset.idx);
+    tDragEl=sitem;
     tDragTimer=setTimeout(()=>{
       tDragActive=true;tDragIdx=idx;
       tDragEl?.classList.add('dragging');
       navigator.vibrate&&navigator.vibrate(30);
     },400);
-  },{passive:false});
+  },{passive:true});
   document.addEventListener('touchmove',e=>{
     if(tDragTimer&&!tDragActive){clearTimeout(tDragTimer);tDragTimer=null;return;}
     if(!tDragActive)return;
@@ -2303,7 +2304,11 @@ window.addEventListener('DOMContentLoaded',async()=>{
     const grp=under?.closest('.afd-group');
     if(grp){grp.classList.add('drag-over');tOverAfd=grp.dataset.afd;}else{tOverAfd=null;}
   },{passive:false});
-  document.addEventListener('touchend',()=>_tDragCleanup(true));
+  document.addEventListener('touchend',e=>{
+    const wasDrag=tDragActive;
+    _tDragCleanup(true);
+    if(wasDrag)e.preventDefault(); // voorkom click-event na drag
+  },{passive:false});
   document.addEventListener('touchcancel',()=>_tDragCleanup(false));
 
   const params=new URLSearchParams(window.location.search);
