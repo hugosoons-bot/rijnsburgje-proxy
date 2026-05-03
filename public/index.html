@@ -469,7 +469,7 @@ let S={
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
-  shopItems:[],extraItems:[],toonAfgevinkt:true,
+  shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
@@ -480,6 +480,7 @@ let S={
 // ── Persistence ───────────────────────────────────────────────────────────────
 function sav(){
   try{localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}
+  try{localStorage.setItem(SK+'-vb',JSON.stringify(S.vasteBoodschappen));}catch(e){}
 }
 
 function parseCats(v){if(!v)return[];if(Array.isArray(v))return v;try{const p=JSON.parse(v);return Array.isArray(p)?p:[p].filter(Boolean);}catch{return[v];}}
@@ -660,6 +661,7 @@ async function migreeerNaarPubliek(){
 }
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
+  try{const v=localStorage.getItem(SK+'-vb');if(v)S.vasteBoodschappen=JSON.parse(v);}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
   await migreeerNaarPubliek();
@@ -1318,6 +1320,13 @@ function bouwShop(){
   });
   const items=Object.values(map);
   items.forEach(ni=>{const o=S.shopItems.find(x=>x.naam.toLowerCase()===ni.naam.toLowerCase()&&x.eenheid===ni.eenheid&&!x.extra);if(o)ni.done=o.done;});
+  // Voeg vaste boodschappen toe die nog niet in extraItems zitten
+  const extraNamen=new Set(S.extraItems.map(e=>e.naam.toLowerCase()));
+  S.vasteBoodschappen.forEach(vb=>{
+    if(!extraNamen.has(vb.naam.toLowerCase())){
+      S.extraItems.push({...vb,extra:true,vast:true,done:false});
+    }
+  });
   S.shopItems=[...items,...S.extraItems.map(e=>({...e,afd:e.afd||getAfd(e.naam)}))];
 }
 async function verbeterBoodschappen(){
@@ -1463,7 +1472,8 @@ function delShop(idx){
   if(item?.sbId)DB.from('shopping_items').delete().eq('id',item.sbId).then(({error})=>{if(error)console.error(error.message);});
   S.shopItems.splice(idx,1);
   if(item?.extra)S.extraItems=S.extraItems.filter(e=>e!==item);
-  rIP();
+  if(item?.vast)verwijderUitVast(item.naam);
+  else rIP();
 }
 async function addExtra(){
   const n=document.getElementById('en')?.value?.trim();if(!n)return;
@@ -1473,6 +1483,9 @@ async function addExtra(){
   const item={naam:n,hoeveelheid:hv,eenheid:een,done:false,extra:true,afd:afdKeuze||getAfd(n)};
   S.extraItems.push(item);S.shopItems.push(item);
   document.getElementById('en').value='';document.getElementById('ehv').value='';document.getElementById('eee').value='';document.getElementById('eafd').value='';
+  // Vraag of item vast wekelijks moet worden (alleen als nog niet in vasteBoodschappen)
+  const alVast=S.vasteBoodschappen.some(v=>v.naam.toLowerCase()===n.toLowerCase());
+  if(!alVast)S.bevestigVast=item;
   rIP();
   if(S.gebruiker){
     const lijstId=await ensureLijstId();
@@ -1484,6 +1497,23 @@ async function addExtra(){
       if(!error&&data)item.sbId=data.id;
     }
   }
+}
+function bevestigVastBoodschap(ja){
+  if(ja&&S.bevestigVast){
+    const{naam,hoeveelheid,eenheid,afd}=S.bevestigVast;
+    S.vasteBoodschappen.push({naam,hoeveelheid,eenheid,afd});
+    sav();
+    // Markeer item als vast in de lijst
+    const item=S.shopItems.find(i=>i===S.bevestigVast);
+    if(item)item.vast=true;
+    const eitem=S.extraItems.find(i=>i===S.bevestigVast);
+    if(eitem)eitem.vast=true;
+  }
+  S.bevestigVast=null;rIP();
+}
+function verwijderUitVast(naam){
+  S.vasteBoodschappen=S.vasteBoodschappen.filter(v=>v.naam.toLowerCase()!==naam.toLowerCase());
+  sav();rIP();
 }
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
@@ -1809,6 +1839,17 @@ function renderBoodschappen(){
       </div>
     </div>
 
+    <!-- Bevestig vast boodschap -->
+    ${S.bevestigVast?`
+    <div style="background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:14px;color:var(--text);font-weight:500">Wil je <strong>${h(S.bevestigVast.naam)}</strong> toevoegen aan je vaste wekelijkse boodschappen?</div>
+      <div style="font-size:12px;color:var(--text3)">Dan staat het automatisch elke week op je lijstje.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-accent" style="flex:1" onclick="bevestigVastBoodschap(true)">Ja, elke week</button>
+        <button class="btn btn-ghost" style="flex:1" onclick="bevestigVastBoodschap(false)">Nee, alleen nu</button>
+      </div>
+    </div>`:''}
+
     <!-- Actieve items per afdeling -->
     ${groepen.length===0&&actief.length===0?'<div class="hint">Alle boodschappen zijn afgevinkt 🎉</div>':''}
     ${groepen.map(g=>`
@@ -1822,7 +1863,7 @@ function renderBoodschappen(){
           <div class="sitem${item.checking?' checking':''}" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
             <span class="sdrag" title="Lang indrukken om te verplaatsen">⠿</span>
             <div class="scb${item.checking?' checking':''}" onclick="toggleShop(${item.idx})">${item.checking||item.done?'✓':''}</div>
-            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
+            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.vast?' <span style="font-size:10px;color:var(--accent)">↻ vast</span>':item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
             <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
               ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e} ${a.n}</option>`).join('')}
@@ -1847,10 +1888,7 @@ function renderBoodschappen(){
             <button class="sdel" onclick="delShop(${idx})">✕</button>
           </div>`;}).join('')}</div>`:''}
       </div>`:''}
-    ${S.extraItems.filter(i=>!i.done).length>0?`
-    <div style="margin-top:16px">
-      <button class="btn btn-ghost btn-w" onclick="bewaarVoorVolgendeWeek()">Bewaar handmatige items voor volgende week →</button>
-    </div>`:''}`;
+`;
 }
 
 // ── Vrienden ──────────────────────────────────────────────────────────────────
