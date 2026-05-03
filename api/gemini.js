@@ -28,8 +28,12 @@ export default async function handler(req, res) {
       return { role: msg.role === "assistant" ? "model" : "user", parts };
     });
 
+    // Prepend system prompt to first user message (werkt met v1 én v1beta)
+    if (system && contents.length > 0 && contents[0].role === "user") {
+      contents[0].parts.unshift({ text: system + "\n\n" });
+    }
+
     const geminiBody = {
-      ...(system ? { system_instruction: { parts: [{ text: system }] } } : {}),
       contents,
       generationConfig: { maxOutputTokens: max_tokens || 1200 }
     };
