@@ -219,9 +219,10 @@ textarea.inp{resize:vertical}
 .sqty{font-size:13px;color:var(--text2);font-weight:600;white-space:nowrap}
 .sdel{background:transparent;border:none;color:var(--border2);font-size:14px;padding:4px 6px;cursor:pointer;transition:color .15s;flex-shrink:0}
 .sdel:hover{color:var(--red)}
-.sdrag{font-size:14px;color:var(--border2);cursor:grab;flex-shrink:0;user-select:none;padding:0 2px}
-.afd-sel{border:1px solid var(--border);background:var(--surface2);font-size:15px;cursor:pointer;padding:2px 4px;border-radius:6px;flex-shrink:0;width:auto;color:var(--text)}
+.sdrag{font-size:14px;color:var(--border2);cursor:grab;flex-shrink:0;user-select:none;padding:0 2px;touch-action:none}
+.afd-sel{border:1px solid var(--border);background:var(--surface2);font-size:13px;cursor:pointer;padding:2px 4px;border-radius:6px;flex-shrink:0;max-width:150px;color:var(--text)}
 .afd-group.drag-over{outline:2px dashed var(--accent);outline-offset:4px;border-radius:var(--radius)}
+.sitem.dragging{opacity:.5;box-shadow:0 4px 14px rgba(0,0,0,.18);transform:scale(1.02);z-index:10;position:relative}
 .done-section{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:20px}
 .done-section h3{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:6px;cursor:pointer}
 .done-items{display:flex;flex-direction:column;gap:4px}
@@ -432,7 +433,7 @@ const KEUKEN=['Italiaans','Aziatisch','Mexicaans','Indiaas','Midden-Oosters','Fr
 const CATS=['Snel (< 20 min)','Doordeweeks top','Doordeweeks prima','Doordeweeks mwa','Niet nog een keer','Comfort food','Met gasten','Met grote groep','BBQ'];
 const EMOJI_MAP={Italiaans:'🍝',Aziatisch:'🍜',Mexicaans:'🌮',Indiaas:'🍛',Midden:'🧆',Frans:'🥐',Nederlands:'🧀',Zoet:'🍰',default:'🍽'};
 const AFDS=[
-  {n:"Groente & Fruit",e:"🥦",k:"#f0faf0",w:["ui","uien","knoflook","gember","tomaat","tomaten","paprika","courgette","aubergine","spinazie","wortel","broccoli","bloemkool","prei","champignon","paddenstoel","sla","komkommer","avocado","citroen","limoen","aardappel","bataat","zoete aardappel","venkel","kool","spruitjes","asperge","basilicum","peterselie","koriander","tijm","rozemarijn","bieslook","lente-ui","sjalot","radicchio","rucola"]},
+  {n:"Groente & Fruit",e:"🥦",k:"#f0faf0",w:["ui","uien","knoflook","gember","tomaat","tomaten","paprika","courgette","aubergine","spinazie","wortel","broccoli","bloemkool","prei","champignon","paddenstoel","sla","komkommer","avocado","citroen","limoen","aardappel","bataat","zoete aardappel","venkel","kool","spruitjes","asperge","basilicum","peterselie","koriander","tijm","rozemarijn","bieslook","lente-ui","sjalot","radicchio","rucola","banaan","bananen","appel","appels","peer","peren","druif","druiven","aardbei","aardbeien","mango","ananas","kiwi","sinaasappel","sinaasappels","mandarijn","mandarijnen","pruim","pruimen","kers","kersen","framboos","frambozen","bosbes","bosbessen","meloen","watermeloen","papaya","passievrucht","vijg","vijgen","granaatappel","rode biet","biet","radijs","radijsjes","maïs","mais","erwten","sperziebonen","boontjes","paksoi","Chinese kool"]},
   {n:"Zuivel & Eieren",e:"🧀",k:"#fffdf0",w:["melk","room","slagroom","boter","kaas","pecorino","parmezaan","ricotta","mozzarella","cheddar","yoghurt","crème fraîche","kwark","ei","eieren","brie","feta","mascarpone","roomkaas","gouda","gruyère"]},
   {n:"Vlees & Vis",e:"🥩",k:"#fff5f5",w:["kip","kipfilet","gehakt","rundvlees","varkensvlees","spek","pancetta","guanciale","bacon","worst","zalm","tonijn","garnalen","makreel","mosselen","vis","lam","kalkoen","kippenborst"]},
   {n:"Blikken & Potten",e:"🥫",k:"#f5f5ff",w:["blik","kidneybonen","linzen","kikkererwten","bonen","kokosmelk","tomatenpuree","olijven","kappertjes","pesto","tahini","harissa","passata","gedroogde tomaten","ansjovis"]},
@@ -1724,6 +1725,33 @@ function startDragShop(idx){dragShopIdx=idx;}
 function dragOverAfd(el){el.classList.add('drag-over');}
 function dragLeaveAfd(el){el.classList.remove('drag-over');}
 function dropOnAfd(el,afd){el.classList.remove('drag-over');if(dragShopIdx===null)return;moveShopAfd(dragShopIdx,afd);dragShopIdx=null;}
+
+// Touch drag (long press op ⠿ handle → slepen naar andere categorie)
+let tDragIdx=null,tDragTimer=null,tDragActive=false,tOverAfd=null;
+function shopTouchStart(e,idx){
+  tDragTimer=setTimeout(()=>{
+    tDragActive=true;tDragIdx=idx;
+    e.target.closest('.sitem')?.classList.add('dragging');
+    navigator.vibrate&&navigator.vibrate(30);
+  },400);
+}
+function shopTouchMove(e){
+  if(!tDragActive){clearTimeout(tDragTimer);tDragTimer=null;return;}
+  e.preventDefault();
+  const t=e.touches[0];
+  document.querySelectorAll('.afd-group.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  const under=document.elementFromPoint(t.clientX,t.clientY);
+  const grp=under?.closest('.afd-group');
+  if(grp){grp.classList.add('drag-over');tOverAfd=grp.dataset.afd;}else{tOverAfd=null;}
+}
+function shopTouchEnd(e){
+  clearTimeout(tDragTimer);tDragTimer=null;
+  document.querySelectorAll('.sitem.dragging').forEach(el=>el.classList.remove('dragging'));
+  document.querySelectorAll('.afd-group.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  if(tDragActive&&tOverAfd!==null&&tDragIdx!==null)moveShopAfd(tDragIdx,tOverAfd);
+  tDragActive=false;tDragIdx=null;tOverAfd=null;
+}
+
 function moveShopAfd(idx,afd){
   if(!S.shopItems[idx])return;
   S.shopItems[idx].afd=afd;
@@ -1774,20 +1802,20 @@ function renderBoodschappen(){
     <!-- Actieve items per afdeling -->
     ${groepen.length===0&&actief.length===0?'<div class="hint">Alle boodschappen zijn afgevinkt 🎉</div>':''}
     ${groepen.map(g=>`
-      <div class="afd-group" ondragover="event.preventDefault();dragOverAfd(this)" ondragleave="dragLeaveAfd(this)" ondrop="event.preventDefault();dropOnAfd(this,'${g.n}')">
+      <div class="afd-group" data-afd="${g.n}" ondragover="event.preventDefault();dragOverAfd(this)" ondragleave="dragLeaveAfd(this)" ondrop="event.preventDefault();dropOnAfd(this,'${g.n}')">
         <div class="afd-header">
           <span class="afd-title">${g.e} ${g.n}</span>
           <div class="afd-line"></div>
           <span class="afd-count">${g.items.length}</span>
         </div>
         ${g.items.map(item=>`
-          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})">
-            <span class="sdrag" title="Slepen om categorie te wijzigen">⠿</span>
+          <div class="sitem" style="background:${g.k}" draggable="true" ondragstart="startDragShop(${item.idx})" ontouchmove="shopTouchMove(event)" ontouchend="shopTouchEnd(event)">
+            <span class="sdrag" title="Lang indrukken om te verplaatsen" ontouchstart="shopTouchStart(event,${item.idx})">⠿</span>
             <div class="scb" onclick="toggleShop(${item.idx})">${item.done?'✓':''}</div>
             <span class="sname" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
             <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
-              ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e}</option>`).join('')}
+              ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e} ${a.n}</option>`).join('')}
             </select>
             <button class="sdel" onclick="delShop(${item.idx})">✕</button>
           </div>`).join('')}
