@@ -83,6 +83,8 @@ a{color:var(--accent);text-decoration:none}
 .rcard-img{height:168px;background:linear-gradient(135deg,var(--surface2) 0%,var(--border2) 100%);display:flex;align-items:center;justify-content:center;position:relative}
 .rcard-img-emoji{font-size:56px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))}
 .sel-badge{position:absolute;top:12px;right:12px;background:var(--accent);color:var(--color-bg);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.meld-bdg{background:var(--accent);color:var(--color-bg);border-radius:10px;padding:0 5px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle;line-height:1.6}
+.meld-nieuw{background:var(--accent-bg) !important;border-color:var(--accent) !important}
 .tijd-sticker{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px);color:var(--color-bg);font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;letter-spacing:.3px;pointer-events:none}
 .week-nav{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:18px;box-shadow:var(--shadow)}
 .rcard-body{padding:18px 18px 14px}
@@ -322,7 +324,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('profiel')">Profiel</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg" style="display:none"></span></button>
     </nav>
   </div>
 </div>
@@ -476,7 +478,7 @@ let S={
   actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,kookModal:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
-  editId:null,editResultIdx:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
+  editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   publiekeRecepten:[],ladenGemeenschap:false,
@@ -575,6 +577,7 @@ async function laadVrienden(){
   ]);
   S.ikVolg=ikVolgData.data||[];
   S.volgers=volgersData.data||[];
+  laadMeldingen();
   rIP();
   await laadFeed();
 }
@@ -2075,11 +2078,38 @@ function renderBoodschappen(){
 // ── Vrienden ──────────────────────────────────────────────────────────────────
 function renderVrienden(){
   const volgtIds=new Set(S.ikVolg.map(p=>p.id));
+
+  if(S.vriendenProfiel){
+    const vp=S.vriendenProfiel;
+    const init=(vp.display_name||'?')[0].toUpperCase();
+    return`
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+        <button onclick="S.vriendenProfiel=null;rIP()" style="background:none;border:none;font-size:15px;cursor:pointer;color:var(--text3);padding:4px 0;line-height:1">← Terug</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+        <div style="width:52px;height:52px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--accent);flex-shrink:0">${h(init)}</div>
+        <div>
+          <div style="font-size:17px;font-weight:700;color:var(--text)">${h(vp.display_name)}</div>
+          ${vp.bio?`<div style="font-size:13px;color:var(--text3);margin-top:3px">${h(vp.bio)}</div>`:'<div style="font-size:13px;color:var(--text3);margin-top:3px;font-style:italic">Geen bio</div>'}
+        </div>
+      </div>
+      ${vp.laden?'<div class="hint">Laden...</div>':`
+        <span class="sec-label">Zij volgen (${vp.volgend.length})</span>
+        ${vp.volgend.length===0?'<div class="hint">Volgt nog niemand.</div>':vp.volgend.map(p=>{
+          if(p.id===S.gebruiker?.id)return`<div class="friend-row"><div class="friend-avatar">${(p.display_name||'?')[0].toUpperCase()}</div><span class="friend-name">${h(p.display_name)}</span><span style="font-size:12px;color:var(--text3)">Dat ben jij</span></div>`;
+          return`<div class="friend-row">
+            <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
+            <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
+            ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+          </div>`;
+        }).join('')}`}`;
+  }
+
   function friendRow(p,showOntvolg,showTerug){
     const init=(p.display_name||'?')[0].toUpperCase();
     return`<div class="friend-row">
-      <div class="friend-avatar">${init}</div>
-      <span class="friend-name">${h(p.display_name)}</span>
+      <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${init}</div>
+      <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
       ${showOntvolg?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
       ${showTerug&&!volgtIds.has(p.id)?`<button class="btn btn-dark" onclick="volg('${p.id}')">Volg terug</button>`:''}
       ${showTerug&&volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
@@ -2108,8 +2138,8 @@ function renderVrienden(){
           <button class="btn btn-accent" onclick="zoekGebruikers()" ${S.ladenVrienden?'disabled':''}>${S.ladenVrienden?'...':'Zoeken'}</button>
         </div>
         ${S.vriendenResultaten.length>0?`<div>${S.vriendenResultaten.map(p=>`<div class="friend-row">
-            <div class="friend-avatar">${(p.display_name||'?')[0].toUpperCase()}</div>
-            <span class="friend-name">${h(p.display_name)}</span>
+            <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
+            <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
             ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
           </div>`).join('')}</div>`:''}
       </div>
@@ -2223,6 +2253,43 @@ function renderProfiel(){
   </div>`;
 }
 
+function renderMeldingen(){
+  const gezien=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
+  return`<div style="max-width:480px;margin:0 auto;padding:8px 0">
+    <h2 style="font-size:17px;color:var(--text);margin-bottom:16px">Meldingen</h2>
+    ${S.volgers.length===0
+      ?'<div class="hint">Nog geen meldingen.</div>'
+      :S.volgers.map(p=>{
+        const isNieuw=!gezien.has(p.id);
+        const init=(p.display_name||'?')[0].toUpperCase();
+        return`<div class="friend-row${isNieuw?' meld-nieuw':''}">
+          <div class="friend-avatar">${h(init)}</div>
+          <div style="flex:1"><span style="font-size:14px;font-weight:600;color:var(--text)">${h(p.display_name)}</span><span style="font-size:13px;color:var(--text3)"> volgt jou nu</span></div>
+          ${isNieuw?'<span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:10px">Nieuw</span>':''}
+        </div>`;
+      }).join('')}
+  </div>`;
+}
+function markMeldingenGezien(){
+  try{localStorage.setItem(SK+'-meld-gezien',JSON.stringify(S.volgers.map(p=>p.id)));}catch(e){}
+  S.meldBadge=0;
+}
+function laadMeldingen(){
+  const gezien=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
+  S.meldBadge=S.volgers.filter(p=>!gezien.has(p.id)).length;
+}
+async function openVriendProfiel(id){
+  S.vriendenProfiel={id,display_name:'',bio:'',volgend:[],laden:true};
+  rIP();
+  const[{data:prof},{data:volgend}]=await Promise.all([
+    DB.from('profiles').select('id,display_name,bio').eq('id',id).single(),
+    DB.from('follows').select('following_id').eq('follower_id',id),
+  ]);
+  const volgIds=(volgend||[]).map(r=>r.following_id);
+  const{data:volgProf}=volgIds.length>0?await DB.from('profiles').select('id,display_name').in('id',volgIds):{data:[]};
+  S.vriendenProfiel={id,display_name:prof?.display_name||'',bio:prof?.bio||'',volgend:volgProf||[],laden:false};
+  rIP();
+}
 async function opslaanNaam(){
   const naam=document.getElementById('p-naam')?.value?.trim();
   if(!naam||!S.gebruiker)return;
@@ -2479,8 +2546,10 @@ function render(){
   }
   hdr.style.display='';
   const naam=S.profiel?.display_name||S.gebruiker?.email||'';
-  document.getElementById('hdr-sub').innerHTML=`${h(naam)} &middot; ${S.recepten.length} recepten`;
-  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','vrienden','weekmenu','boodschappen','profiel'][i]===S.tab));
+  document.getElementById('hdr-sub').innerHTML=`<span onclick="setTab('profiel')" style="text-decoration:underline;cursor:pointer;text-underline-offset:2px">${h(naam)}</span> &middot; ${S.recepten.length} recepten`;
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','vrienden','weekmenu','boodschappen','meldingen'][i]===S.tab));
+  const bdg=document.getElementById('meld-bdg');
+  if(bdg){if(S.meldBadge>0){bdg.textContent=S.meldBadge;bdg.style.display='inline';}else bdg.style.display='none';}
   let html='';
   if(S.tab==='recepten')html=renderRecepten();
   else if(S.tab==='zoeken')html=renderZoeken();
@@ -2488,6 +2557,7 @@ function render(){
   else if(S.tab==='boodschappen')html=renderBoodschappen();
   else if(S.tab==='vrienden')html=renderVrienden();
   else if(S.tab==='profiel')html=renderProfiel();
+  else if(S.tab==='meldingen'){markMeldingenGezien();html=renderMeldingen();}
   document.getElementById('content').innerHTML=html;
 }
 async function importeerLink(url){
