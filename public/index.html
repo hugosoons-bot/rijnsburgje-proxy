@@ -568,7 +568,8 @@ async function kopieerPubliek(id){
   render();
   await savRecept(kopie);
   if(r.eigenaarId&&r.eigenaarId!==S.gebruiker?.id){
-    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:id,recipe_title:r.titel}).then(({error})=>{if(error)console.warn('Kopieer melding:',error.message);});
+    const{error:me}=await DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:id,recipe_title:r.titel});
+    if(me)console.error('Kopieer melding fout:',me.message,me);
   }
   alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
@@ -589,9 +590,11 @@ async function laadPubliekeRecepten(){
 }
 async function laadMeldingenDB(){
   if(!S.gebruiker)return;
-  const{data}=await DB.from('notifications').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false}).limit(50);
+  const{data,error}=await DB.from('notifications').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false}).limit(50);
+  if(error){console.error('Meldingen laden mislukt:',error.message);return;}
   S.meldingen=data||[];
   laadMeldingen();
+  rIP();
 }
 async function laadVrienden(){
   if(!S.gebruiker)return;
@@ -1091,6 +1094,7 @@ function setTab(t){
   S.tab=t;S.fout='';
   try{localStorage.setItem(SK+'-tab',t);}catch(e){}
   if(t==='vrienden'){S.vriendenSubTab=null;laadVrienden();laadPubliekeRecepten();}
+  if(t==='meldingen'){laadMeldingenDB();}
   document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'recepten',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'vrienden',profiel:'profiel'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
   render();
 }
@@ -1991,7 +1995,8 @@ async function voegVriendReceptToe(){
   render();
   await savRecept(kopie);
   if(r.eigenaarId&&r.eigenaarId!==S.gebruiker.id){
-    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:r.id,recipe_title:r.titel}).then(({error})=>{if(error)console.warn('Voeg toe melding:',error.message);});
+    const{error:me}=await DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:r.id,recipe_title:r.titel});
+    if(me)console.error('Voeg toe melding fout:',me.message,me);
   }
   alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
