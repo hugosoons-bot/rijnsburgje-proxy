@@ -1330,15 +1330,12 @@ Datum: gebruik DATUM.`;
 
 const SYS_SHOP=`Geef ALLEEN een pure JSON array van strings. Geen uitleg, geen backticks.
 Jij krijgt een lijst ingrediënten met berekende hoeveelheden voor een boodschappenlijst.
-Formuleer elk ingrediënt in correct Nederlands als één zin, klaar om op te schrijven.
+Geef voor elk ingrediënt ALLEEN de schone Nederlandse productnaam terug. Geen hoeveelheden of eenheden in de output.
 Regels:
-1. Hoeveelheid + eenheid + naam samenvoegen: "400g spaghetti", "3 eieren", "1 grote ui"
-2. Correcte Nederlandse meervouden: ei→eieren, ui→uien, blik→blikken, teen→teentjes, tak→takken, plak→plakken, blaadje→blaadjes, bol→bollen, schijf→schijven
-3. Rond hoeveelheden zinvol af: 266.7g→270g, 133g→130g, 2.3 eieren→2 eieren, 1.8 eieren→2 eieren
-4. Breuken voor kleine hoeveelheden: 0.5→½, 0.25→¼, 0.75→¾, 1.5→1½
-5. Eenheid "x" of "st" weglaten bij telbaren: "1 x ui"→"1 ui", "2 st eieren"→"2 eieren"
-6. Behoud de volgorde exact gelijk aan de input
-7. Voeg niks toe, verwijder niks — alleen herformuleren`;
+1. Correcte Nederlandse meervouden wanneer hoeveelheid > 1: ei→eieren, ui→uien, blik→blikken, teen→teentjes, tak→takken, plak→plakken, blaadje→blaadjes, bol→bollen, schijf→schijven
+2. Enkelvoud wanneer hoeveelheid = 1
+3. Behoud de volgorde exact gelijk aan de input
+4. Alleen de productnaam — geen cijfers, geen eenheden`;
 
 
 async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
@@ -1483,8 +1480,8 @@ async function verbeterBoodschappen(){
 async function maakBoodschappenlijst(){
   bouwShop();setTab('boodschappen');render();
   await verbeterBoodschappen();
+  render();
   if(S.gebruiker&&S.menuId)await slaBoodschappenlijstOp();
-  else render();
 }
 async function slaBoodschappenlijstOp(){
   const{data:bestaand}=await DB.from('shopping_lists').select('id').eq('user_id',S.gebruiker.id).eq('menu_id',S.menuId).maybeSingle();
@@ -2194,8 +2191,7 @@ function renderBoodschappen(){
           <div class="sitem${item.checking?' checking':''}" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
             <span class="sdrag" title="Lang indrukken om te verplaatsen">⠿</span>
             <div class="scb${item.checking?' checking':''}" onclick="toggleShop(${item.idx})">${item.checking||item.done?'✓':''}</div>
-            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${h(item.naam)}${item.vast?' <span style="font-size:10px;color:var(--accent)">↻ vast</span>':item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
-            ${item.extra?`<span class="sqty">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
+            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${item.hoeveelheid?`<strong>${item.hoeveelheid}${item.eenheid&&item.eenheid!=='x'&&item.eenheid!=='st'?' '+h(item.eenheid):''}</strong> `:''}${h(item.naam)}${item.vast?' <span style="font-size:10px;color:var(--accent)">↻ vast</span>':item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
               ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e} ${a.n}</option>`).join('')}
             </select>
@@ -2214,8 +2210,7 @@ function renderBoodschappen(){
           const idx=S.shopItems.indexOf(item);
           return`<div class="sitem done" style="background:white">
             <div class="scb done" onclick="toggleShop(${idx})">✓</div>
-            <span class="sname done">${h(item.naam)}</span>
-            ${item.extra?`<span class="sqty" style="opacity:.6">${item.hoeveelheid} ${h(item.eenheid)}</span>`:''}
+            <span class="sname done">${item.hoeveelheid?`<strong>${item.hoeveelheid}${item.eenheid&&item.eenheid!=='x'&&item.eenheid!=='st'?' '+h(item.eenheid):''}</strong> `:''}${h(item.naam)}</span>
             <button class="sdel" onclick="delShop(${idx})">✕</button>
           </div>`;}).join('')}</div>`:''}
       </div>`:''}
