@@ -1782,6 +1782,7 @@ function renderRecepten(){
   }
   return`
     ${searchBar}
+    ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)} <button class="btn btn-ghost" style="margin-left:8px;font-size:12px" onclick="S.fout='';rIP()">✕</button></div>`:''}
     <div class="filter-wrap">
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
