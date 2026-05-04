@@ -506,7 +506,7 @@ let S={
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
-  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
+  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
 
@@ -562,9 +562,12 @@ async function togglePubliek(id){
 }
 async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
+  if(S.toegevoegdeIds.has(id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
   const kopie={...r,id:nieuwId,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
+  S.toegevoegdeIds.add(id);
+  try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   render();
   await savRecept(kopie);
   if(r.eigenaarId&&r.eigenaarId!==S.gebruiker?.id){
@@ -712,6 +715,7 @@ async function migreeerNaarPubliek(){
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-vb');if(v)S.vasteBoodschappen=JSON.parse(v);}catch{}
+  try{const v=localStorage.getItem(SK+'-toegevoegd');if(v)S.toegevoegdeIds=new Set(JSON.parse(v));}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
   await migreeerNaarPubliek();
@@ -1979,7 +1983,13 @@ function openVriendReceptModal(receptId){
     ${r.keuken?`<div style="font-size:13px;color:var(--text3);margin-bottom:6px">${h(r.keuken)}</div>`:''}
     ${r.omschrijving?`<div style="font-size:14px;color:var(--text2);line-height:1.5">${h(r.omschrijving)}</div>`:''}
   `;
-  document.getElementById('vrm-kopieer').onclick=()=>voegVriendReceptToe();
+  const al=S.toegevoegdeIds.has(receptId);
+  const btn=document.getElementById('vrm-kopieer');
+  btn.textContent=al?'✓ Al in je recepten':'Voeg toe aan mijn recepten';
+  btn.disabled=al;
+  btn.className=al?'btn btn-saved':'btn btn-accent';
+  btn.style.cssText='flex:2;min-height:44px'+(al?';opacity:1':'');
+  btn.onclick=al?null:()=>voegVriendReceptToe();
   document.getElementById('vriend-recept-modal').classList.add('open');
 }
 function sluitVriendReceptModal(){
@@ -1988,9 +1998,12 @@ function sluitVriendReceptModal(){
 }
 async function voegVriendReceptToe(){
   const r=S.vriendenReceptModal;if(!r||!S.gebruiker)return;
+  if(S.toegevoegdeIds.has(r.id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
   const kopie={...r,id:nieuwId,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
+  S.toegevoegdeIds.add(r.id);
+  try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   sluitVriendReceptModal();
   render();
   await savRecept(kopie);
@@ -2240,7 +2253,7 @@ function renderVrienden(){
                     <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.titel)}</div>
                     ${r.keuken?`<div style="font-size:11px;color:var(--text3)">${h(r.keuken)}</div>`:''}
                   </div>
-                  <span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>
+                  ${S.toegevoegdeIds.has(r.id)?`<span style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">✓ Toegevoegd</span>`:`<span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>`}
                 </div>`).join('')}</div>`}
           </div>`).join('')}
         <div style="margin-top:4px">
