@@ -448,7 +448,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     <div class="dpk-scroll" id="vrm-body"></div>
     <div class="dpk-foot" style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1;min-height:44px" onclick="sluitVriendReceptModal()">Sluiten</button>
-      <button class="btn btn-accent" style="flex:2;min-height:44px" id="vrm-kopieer">Ganef dit recept</button>
+      <button class="btn btn-accent" style="flex:2;min-height:44px" id="vrm-kopieer">Lijkt mij lekker</button>
     </div>
   </div>
 </div>
@@ -1724,7 +1724,7 @@ function buildCard(r,opts={}){
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
-      ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Ganef dit recept →</button>`):''}
+      ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Lijkt mij lekker →</button>`):''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
   </div>`;
@@ -1987,7 +1987,7 @@ function openVriendReceptModal(receptId){
   `;
   const al=S.toegevoegdeIds.has(receptId);
   const btn=document.getElementById('vrm-kopieer');
-  btn.textContent=al?'✓ Al in kookboek':'Ganef dit recept';
+  btn.textContent=al?'✓ Al in kookboek':'Lijkt mij lekker';
   btn.disabled=al;
   btn.className=al?'btn btn-saved':'btn btn-accent';
   btn.style.cssText='flex:2;min-height:44px'+(al?';opacity:1':'');
