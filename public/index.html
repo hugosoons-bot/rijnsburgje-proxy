@@ -100,7 +100,7 @@ a{color:var(--accent);text-decoration:none}
 .rcard-note{background:var(--gold-bg);border-left:3px solid var(--gold);padding:6px 10px;font-size:12px;color:var(--gold);margin-bottom:12px;border-radius:0 6px 6px 0;font-style:italic}
 .rcard-meta{display:flex;justify-content:space-between;align-items:center}
 .stars{display:flex;gap:2px}
-.star{font-size:16px;color:var(--border2);cursor:pointer;transition:color .1s;line-height:1}
+.star{color:var(--border2);cursor:pointer;transition:color .1s;display:inline-flex;align-items:center}
 .star.on{color:var(--accent)}
 .rcard-pers{font-size:12px;color:var(--text3)}
 .rcard-divider{height:1px;background:var(--border);margin:0 18px}
@@ -481,11 +481,11 @@ const DEMO=[
   {id:"demo-1",titel:"Pasta Carbonara",omschrijving:"Klassieke Romeinse pasta met ei, pecorino en guanciale. Romig zonder room.",personen:4,
    ingredienten:[{naam:"spaghetti",hoeveelheid:400,eenheid:"g"},{naam:"guanciale of pancetta",hoeveelheid:150,eenheid:"g"},{naam:"eieren",hoeveelheid:4,eenheid:"st"},{naam:"pecorino romano",hoeveelheid:80,eenheid:"g"},{naam:"zwarte peper",hoeveelheid:1,eenheid:"tl"}],
    stappen:["Kook de pasta al dente in ruim gezouten water.","Bak de guanciale knapperig in een droge koekenpan.","Klop eieren los met pecorino en veel zwarte peper.","Voeg pasta-kookvocht toe aan het eimengsel.","Meng buiten het vuur met het eimengsel en guanciale.","Serveer direct."],
-   keuken:"Italiaans",categorie:["Doordeweeks top"],tags:[],notities:"Niet te veel vuur, anders stolt het ei.",bron:"https://www.seriouseats.com/the-best-carbonara",rating:5,opgeslagen:true,datum:"2024-01-15"},
+   keuken:"Italiaans",categorie:["Doordeweeks top"],tags:[],notities:"Niet te veel vuur, anders stolt het ei.",bron:"https://www.seriouseats.com/the-best-carbonara",rating:3,opgeslagen:true,datum:"2024-01-15"},
   {id:"demo-2",titel:"Dal Makhani",omschrijving:"Rijke romige linzensoep met zwarte linzen, tomaat en boter. Comfort food op z'n best.",personen:4,
    ingredienten:[{naam:"zwarte linzen",hoeveelheid:250,eenheid:"g"},{naam:"kidneybonen (blik)",hoeveelheid:200,eenheid:"g"},{naam:"tomaten (blik)",hoeveelheid:400,eenheid:"g"},{naam:"boter",hoeveelheid:60,eenheid:"g"},{naam:"slagroom",hoeveelheid:100,eenheid:"ml"},{naam:"ui",hoeveelheid:1,eenheid:"st"},{naam:"knoflook",hoeveelheid:4,eenheid:"teentjes"},{naam:"garam masala",hoeveelheid:2,eenheid:"tl"}],
    stappen:["Week de linzen een nacht en kook ze gaar.","Fruit ui en knoflook in boter.","Voeg specerijen toe en bak 2 min.","Voeg tomaten toe, 15 min sudderen.","Meng met linzen, 30 min pruttelen.","Slagroom erdoor."],
-   keuken:"Indiaas",categorie:["Comfort food"],tags:[],notities:"Heerlijk de dag erna ook.",bron:"https://www.bonappetit.com/recipe/dal-makhani",rating:4,opgeslagen:true,datum:"2024-01-20"}
+   keuken:"Indiaas",categorie:["Comfort food"],tags:[],notities:"Heerlijk de dag erna ook.",bron:"https://www.bonappetit.com/recipe/dal-makhani",rating:2,opgeslagen:true,datum:"2024-01-20"}
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1677,7 +1677,8 @@ function buildLabels(r){
   (r.tags||[]).forEach(t=>s+=`<span class="lbl lbl-t">${h(t)}</span>`);
   return s+'</div>';
 }
-function buildStars(rating,id){return'<div class="stars">'+[1,2,3,4,5].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">★</span>`).join('')+'</div>';}
+const MICH_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:block"><g transform="translate(12,12)"><ellipse cx="0" cy="-4" rx="2.5" ry="5"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(60)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(120)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(180)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(240)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(300)"/></g></svg>';
+function buildStars(rating,id){return'<div class="stars">'+[1,2,3].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">${MICH_SVG}</span>`).join('')+'</div>';}
 function buildCard(r,opts={}){
   const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer,showLike,showAuteur}=opts;
   const sel=S.geselecteerd.includes(r.id);
