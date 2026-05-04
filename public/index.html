@@ -326,11 +326,11 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     </div>
     <div id="hdr-sub">laden...</div>
     <nav id="tabs" role="tablist" aria-label="Navigatie">
-      <button class="tb on" role="tab" aria-selected="true" onclick="setTab('recepten')">Recepten</button>
+      <button class="tb on" role="tab" aria-selected="true" onclick="setTab('recepten')">Kookboek</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg"></span></button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Chefs</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Wekker<span id="meld-bdg" class="meld-bdg"></span></button>
     </nav>
   </div>
 </div>
@@ -448,7 +448,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     <div class="dpk-scroll" id="vrm-body"></div>
     <div class="dpk-foot" style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1;min-height:44px" onclick="sluitVriendReceptModal()">Sluiten</button>
-      <button class="btn btn-accent" style="flex:2;min-height:44px" id="vrm-kopieer">Voeg toe aan mijn recepten</button>
+      <button class="btn btn-accent" style="flex:2;min-height:44px" id="vrm-kopieer">Ganef dit recept</button>
     </div>
   </div>
 </div>
@@ -975,7 +975,7 @@ function openRpk(dateStr){
   const al=new Set(getRecipesForWeek(dagWeekStart(dateStr))[new Date(dateStr+'T00:00:00').getDay()].map(r=>r.id));
   const lijst=S.recepten.filter(r=>!r.id.startsWith('demo-'));
   document.getElementById('rpk-lijst').innerHTML=lijst.length===0
-    ?'<div class="hint">Geen recepten gevonden</div>'
+    ?'<div class="hint">De pan is nog leeg</div>'
     :lijst.map(r=>`<div class="dag-recept-item">
         <div class="dag-recept-naam">${h(r.titel)}</div>
         <button class="btn ${al.has(r.id)?'btn-ghost':'btn-accent'}" onclick="kiesReceptVoorDag('${r.id}')" style="white-space:nowrap;font-size:12px;padding:5px 10px">${al.has(r.id)?'Al gepland':'+ Toevoegen'}</button>
@@ -1099,7 +1099,7 @@ function setTab(t){
   try{localStorage.setItem(SK+'-tab',t);}catch(e){}
   if(t==='vrienden'){S.vriendenSubTab=null;laadVrienden();laadPubliekeRecepten();}
   if(t==='meldingen'){laadMeldingenDB();}
-  document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'recepten',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'vrienden',profiel:'profiel'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
+  document.querySelectorAll('#tabs .tb').forEach(b=>{const on=b.textContent.trim().toLowerCase()===({recepten:'kookboek',weekmenu:'weekmenu',boodschappen:'boodschappen',vrienden:'chefs',meldingen:'wekker',profiel:'profiel'}[t]||'');b.classList.toggle('on',on);b.setAttribute('aria-selected',on);});
   render();
 }
 async function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rating=v;render();await savRecept(r);}}
@@ -1716,16 +1716,16 @@ function buildCard(r,opts={}){
         <button class="btn btn-dark" onclick="openCalPicker('${r.id}')" style="width:100%;margin-bottom:8px">📅 Selecteer voor weekmenu</button>
         ${getDatesForRecipe(r.id).length>0
           ?`<div style="display:flex;flex-wrap:wrap;gap:5px">${getDatesForRecipe(r.id).sort().map(ds=>`<span class="datum-pill">${formatDagKort(ds)}<button onclick="unlinkRecipeFromDate('${r.id}','${ds}')" title="Verwijderen">✕</button></span>`).join('')}</div>`
-          :`<span style="font-size:12px;color:var(--text3)">Nog niet ingepland</span>`}
+          :`<span style="font-size:12px;color:var(--text3)">Nog niets op het vuur</span>`}
       </div>`:''}
     </div>
     <div class="rcard-actions">
-      ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'Opslaan'}</button><button class="btn btn-light" onclick="openEditResultaat(${idx})">✏️ Wijzig</button>`:''}
-      ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Kies voor dag</button>`;})():''}
+      ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'In het kookboek'}</button><button class="btn btn-light" onclick="openEditResultaat(${idx})">✏️ Wijzig</button>`:''}
+      ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Plan dit gerecht</button>`;})():''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
-      ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in je recepten</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Voeg toe aan mijn recepten →</button>`):''}
+      ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Ganef dit recept →</button>`):''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
   </div>`;
@@ -1775,7 +1775,7 @@ function renderRecepten(){
     </div>`;
   if(zt){
     const resultHTML=gef.length===0
-      ?'<div class="empty"><span>📭</span>Geen recepten gevonden voor "'+h(S.zoekterm)+'"</div>'
+      ?'<div class="empty"><span>📭</span>De pan is nog leeg voor "'+h(S.zoekterm)+'"</div>'
       :`<p style="font-size:12px;color:var(--text3);margin-bottom:8px">${gef.length} resultaat${gef.length===1?'':'en'} voor "<strong>${h(S.zoekterm)}</strong>"</p><div class="search-list">${gef.map(r=>buildSearchRow(r)).join('')}</div>`;
     return searchBar+resultHTML;
   }
@@ -1786,9 +1786,9 @@ function renderRecepten(){
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
     </div>
     ${S.recepten.length===0
-      ?`<div class="empty"><span>👨‍🍳</span>Nog geen recepten opgeslagen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
+      ?`<div class="empty"><span>👨‍🍳</span>Jouw kookboek is nog blanco — tijd om de ketel te vullen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
       :gef.length===0
-        ?'<div class="empty"><span>📭</span>Geen recepten gevonden</div>'
+        ?'<div class="empty"><span>📭</span>De pan is nog leeg</div>'
         :`<div class="cards-grid feed-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
@@ -1985,7 +1985,7 @@ function openVriendReceptModal(receptId){
   `;
   const al=S.toegevoegdeIds.has(receptId);
   const btn=document.getElementById('vrm-kopieer');
-  btn.textContent=al?'✓ Al in je recepten':'Voeg toe aan mijn recepten';
+  btn.textContent=al?'✓ Al in kookboek':'Ganef dit recept';
   btn.disabled=al;
   btn.className=al?'btn btn-saved':'btn btn-accent';
   btn.style.cssText='flex:2;min-height:44px'+(al?';opacity:1':'');
@@ -2237,10 +2237,10 @@ function renderVrienden(){
         <div style="width:52px;height:52px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--accent);flex-shrink:0">${h(init)}</div>
         <div>
           <div style="font-size:17px;font-weight:700;color:var(--text)">${h(vp.display_name)}</div>
-          ${vp.bio?`<div style="font-size:13px;color:var(--text3);margin-top:3px">${h(vp.bio)}</div>`:'<div style="font-size:13px;color:var(--text3);margin-top:3px;font-style:italic">Geen bio</div>'}
+          ${vp.bio?`<div style="font-size:13px;color:var(--text3);margin-top:3px">${h(vp.bio)}</div>`:'<div style="font-size:13px;color:var(--text3);margin-top:3px;font-style:italic">Nog geen keukengeheimen gedeeld</div>'}
         </div>
       </div>
-      ${vp.laden?'<div class="hint">Laden...</div>':`
+      ${vp.laden?'<div class="hint">Smaakjes ophalen...</div>':`
         ${[['vorige week','vorige'],['deze week','deze'],['volgende week','volgende']].map(([label,key])=>`
           <div style="margin-bottom:18px">
             <span class="sec-label">${label}</span>
@@ -2263,7 +2263,7 @@ function renderVrienden(){
             return`<div class="friend-row">
               <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
               <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
-              ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+              ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Uit de keuken</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volg deze chef</button>`}
             </div>`;
           }).join('')}
         </div>`}`;
@@ -2274,9 +2274,9 @@ function renderVrienden(){
     return`<div class="friend-row">
       <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${init}</div>
       <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
-      ${showOntvolg?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
+      ${showOntvolg?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Uit de keuken</button>`:''}
       ${showTerug&&!volgtIds.has(p.id)?`<button class="btn btn-dark" onclick="volg('${p.id}')">Volg terug</button>`:''}
-      ${showTerug&&volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:''}
+      ${showTerug&&volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Uit de keuken</button>`:''}
     </div>`;
   }
 
@@ -2299,18 +2299,18 @@ function renderVrienden(){
         <span class="sec-label">Gebruiker zoeken</span>
         <div style="display:flex;gap:8px;margin-bottom:${S.vriendenResultaten.length>0?'12':'0'}px">
           <input id="vz" class="inp" style="flex:1" placeholder="Zoek op naam..." onkeydown="if(event.key==='Enter')zoekGebruikers()">
-          <button class="btn btn-accent" onclick="zoekGebruikers()" ${S.ladenVrienden?'disabled':''}>${S.ladenVrienden?'...':'Zoeken'}</button>
+          <button class="btn btn-accent" onclick="zoekGebruikers()" ${S.ladenVrienden?'disabled':''}>${S.ladenVrienden?'...':'Op zoek naar smaken'}</button>
         </div>
         ${S.vriendenResultaten.length>0?`<div>${S.vriendenResultaten.map(p=>`<div class="friend-row">
             <div class="friend-avatar" style="cursor:pointer" onclick="openVriendProfiel('${p.id}')">${(p.display_name||'?')[0].toUpperCase()}</div>
             <span class="friend-name" style="cursor:pointer;flex:1" onclick="openVriendProfiel('${p.id}')">${h(p.display_name)}</span>
-            ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Ontvolgen</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volgen</button>`}
+            ${volgtIds.has(p.id)?`<button class="btn btn-ghost" onclick="ontvolg('${p.id}')">Uit de keuken</button>`:`<button class="btn btn-dark" onclick="volg('${p.id}')">Volg deze chef</button>`}
           </div>`).join('')}</div>`:''}
       </div>
 
       <div style="margin-bottom:20px">
         <span class="sec-label">Ik volg (${S.ikVolg.length})</span>
-        ${S.ikVolg.length===0?'<div class="hint">Je volgt nog niemand.</div>':S.ikVolg.map(p=>friendRow(p,true,false)).join('')}
+        ${S.ikVolg.length===0?'<div class="hint">Je keukenploeg is nog leeg.</div>':S.ikVolg.map(p=>friendRow(p,true,false)).join('')}
       </div>
       <div>
         <span class="sec-label">Volgers (${S.volgers.length})</span>
@@ -2330,7 +2330,7 @@ function renderVrienden(){
     ?(a,b)=>(S.likeCounts[b.id]||0)-(S.likeCounts[a.id]||0)
     :(a,b)=>b.datum.localeCompare(a.datum));
   const dezeWeekHTML=S.feedMenus.length===0
-    ?'<div class="hint">Geen vrienden hebben deze week een publiek weekmenu.</div>'
+    ?'<div class="hint">Geen van je chefs kookt deze week publiek.</div>'
     :S.feedMenus.map(menu=>`
       <div class="search-wrap" style="margin-bottom:10px">
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">👤 ${h(menu.naam)} eet deze week</div>
@@ -2360,12 +2360,12 @@ function renderVrienden(){
       </div>`:''}`:'' }
     </div>`;
   const gemeenschapHTML=S.ladenGemeenschap
-    ?'<div class="hint">Recepten laden...</div>'
+    ?'<div class="hint">Kookboek doorbladeren...</div>'
     :vf.sorteer==='dezeweek'
       ?filterBar+dezeWeekHTML
       :S.publiekeRecepten.length===0
         ?'<div class="hint">Nog geen publieke recepten van andere gebruikers.</div>'
-        :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">Geen recepten gevonden voor deze filters.</div>'}</div>`;
+        :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">De pan is nog leeg voor deze filters.</div>'}</div>`;
 
   return`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:${S.ikVolg.length>0?'12':'16'}px">
@@ -2409,7 +2409,7 @@ function renderProfiel(){
     </div>
 
     <div class="card" style="margin-bottom:14px">
-      <div class="card-title" style="margin-bottom:10px">Bio</div>
+      <div class="card-title" style="margin-bottom:10px">Wie ben jij in de keuken?</div>
       <textarea id="p-bio" class="inp" rows="3" placeholder="Vertel iets over jezelf..." style="margin-bottom:10px">${h(bio)}</textarea>
       <button class="btn btn-dark btn-w" onclick="opslaanBio()">Opslaan</button>
     </div>
@@ -2454,8 +2454,8 @@ function renderMeldingen(){
   }).join('');
   const alles=meldItems+volgItems;
   return`<div style="max-width:480px;margin:0 auto;padding:8px 0">
-    <h2 style="font-size:17px;color:var(--text);margin-bottom:16px">Meldingen</h2>
-    ${alles||'<div class="hint">Nog geen meldingen.</div>'}
+    <h2 style="font-size:17px;color:var(--text);margin-bottom:16px">Wekker</h2>
+    ${alles||'<div class="hint">Stil in de keuken.</div>'}
   </div>`;
 }
 function markMeldingenGezien(){
@@ -2526,7 +2526,7 @@ async function wijzigWachtwoord(){
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function renderAuth(){
-  if(S.scherm==='laden')return'<div class="hint" style="padding-top:40vh">Laden...</div>';
+  if(S.scherm==='laden')return'<div class="hint" style="padding-top:40vh">Smaakjes ophalen...</div>';
   return`
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
