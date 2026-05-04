@@ -504,7 +504,7 @@ let S={
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
-  vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,
+  vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
@@ -566,7 +566,10 @@ async function kopieerPubliek(id){
   S.recepten.unshift(kopie);
   render();
   await savRecept(kopie);
-  alert(`"${r.titel}" is gekopieerd naar jouw recepten.`);
+  if(r.eigenaarId&&r.eigenaarId!==S.gebruiker?.id){
+    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:id,recipe_title:r.titel});
+  }
+  alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
 async function laadPubliekeRecepten(){
   if(!S.gebruiker)return;
@@ -582,6 +585,12 @@ async function laadPubliekeRecepten(){
   }
   S.publiekeRecepten=recepten;
   S.ladenGemeenschap=false;rIP();
+}
+async function laadMeldingenDB(){
+  if(!S.gebruiker)return;
+  const{data}=await DB.from('notifications').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false}).limit(50);
+  S.meldingen=data||[];
+  laadMeldingen();
 }
 async function laadVrienden(){
   if(!S.gebruiker)return;
@@ -676,6 +685,10 @@ async function toggleLike(recipeId){
     await DB.from('recipe_likes').insert({recipe_id:recipeId,user_id:S.gebruiker.id});
     S.mijnLikes.add(recipeId);
     S.likeCounts[recipeId]=(S.likeCounts[recipeId]||0)+1;
+    const lr=S.publiekeRecepten.find(x=>x.id===recipeId)||S.menuReceptenMap[recipeId];
+    if(lr&&lr.eigenaarId&&lr.eigenaarId!==S.gebruiker.id){
+      DB.from('notifications').upsert({user_id:lr.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'like',recipe_id:recipeId,recipe_title:lr.titel},{onConflict:'actor_id,recipe_id,type',ignoreDuplicates:true});
+    }
   }
   rIP();
 }
@@ -701,6 +714,7 @@ async function lod(){
   await laadWeekmenu();
   await laadBoodschappen();
   await laadVrienden();
+  await laadMeldingenDB();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1975,6 +1989,9 @@ async function voegVriendReceptToe(){
   sluitVriendReceptModal();
   render();
   await savRecept(kopie);
+  if(r.eigenaarId&&r.eigenaarId!==S.gebruiker.id){
+    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:r.id,recipe_title:r.titel});
+  }
   alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
 function kookSP(delta){
@@ -2393,29 +2410,46 @@ function renderProfiel(){
 }
 
 function renderMeldingen(){
-  const gezien=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
+  const gezienVolgers=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
+  const gezienIds=new Set(JSON.parse(localStorage.getItem(SK+'-meld-ids')||'[]'));
+  const meldItems=S.meldingen.map(m=>{
+    const isNieuw=!gezienIds.has(m.id);
+    const init=(m.actor_name||'?')[0].toUpperCase();
+    const tekst=m.type==='like'
+      ?`heeft jouw recept <strong>${h(m.recipe_title||'')}</strong> geliked ❤️`
+      :`heeft jouw recept <strong>${h(m.recipe_title||'')}</strong> toegevoegd aan haar recepten`;
+    return`<div class="friend-row${isNieuw?' meld-nieuw':''}">
+      <div class="friend-avatar">${h(init)}</div>
+      <div style="flex:1;min-width:0"><span style="font-size:14px;font-weight:600;color:var(--text)">${h(m.actor_name)}</span> <span style="font-size:13px;color:var(--text3)">${tekst}</span></div>
+      ${isNieuw?'<span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:10px;flex-shrink:0">Nieuw</span>':''}
+    </div>`;
+  }).join('');
+  const volgItems=S.volgers.map(p=>{
+    const isNieuw=!gezienVolgers.has(p.id);
+    const init=(p.display_name||'?')[0].toUpperCase();
+    return`<div class="friend-row${isNieuw?' meld-nieuw':''}">
+      <div class="friend-avatar">${h(init)}</div>
+      <div style="flex:1"><span style="font-size:14px;font-weight:600;color:var(--text)">${h(p.display_name)}</span><span style="font-size:13px;color:var(--text3)"> volgt jou nu</span></div>
+      ${isNieuw?'<span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:10px;flex-shrink:0">Nieuw</span>':''}
+    </div>`;
+  }).join('');
+  const alles=meldItems+volgItems;
   return`<div style="max-width:480px;margin:0 auto;padding:8px 0">
     <h2 style="font-size:17px;color:var(--text);margin-bottom:16px">Meldingen</h2>
-    ${S.volgers.length===0
-      ?'<div class="hint">Nog geen meldingen.</div>'
-      :S.volgers.map(p=>{
-        const isNieuw=!gezien.has(p.id);
-        const init=(p.display_name||'?')[0].toUpperCase();
-        return`<div class="friend-row${isNieuw?' meld-nieuw':''}">
-          <div class="friend-avatar">${h(init)}</div>
-          <div style="flex:1"><span style="font-size:14px;font-weight:600;color:var(--text)">${h(p.display_name)}</span><span style="font-size:13px;color:var(--text3)"> volgt jou nu</span></div>
-          ${isNieuw?'<span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:10px">Nieuw</span>':''}
-        </div>`;
-      }).join('')}
+    ${alles||'<div class="hint">Nog geen meldingen.</div>'}
   </div>`;
 }
 function markMeldingenGezien(){
-  try{localStorage.setItem(SK+'-meld-gezien',JSON.stringify(S.volgers.map(p=>p.id)));}catch(e){}
+  try{
+    localStorage.setItem(SK+'-meld-gezien',JSON.stringify(S.volgers.map(p=>p.id)));
+    localStorage.setItem(SK+'-meld-ids',JSON.stringify(S.meldingen.map(m=>m.id)));
+  }catch(e){}
   S.meldBadge=0;
 }
 function laadMeldingen(){
-  const gezien=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
-  S.meldBadge=S.volgers.filter(p=>!gezien.has(p.id)).length;
+  const gezienVolgers=new Set(JSON.parse(localStorage.getItem(SK+'-meld-gezien')||'[]'));
+  const gezienIds=new Set(JSON.parse(localStorage.getItem(SK+'-meld-ids')||'[]'));
+  S.meldBadge=S.volgers.filter(p=>!gezienVolgers.has(p.id)).length+S.meldingen.filter(m=>!gezienIds.has(m.id)).length;
 }
 async function openVriendProfiel(id){
   S.vriendenProfiel={id,display_name:'',bio:'',volgend:[],weken:{vorige:[],deze:[],volgende:[]},laden:true};
@@ -2849,6 +2883,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
       if(typeof laadBoodschappen==='function')await laadBoodschappen();
       if(typeof laadVrienden==='function')await laadVrienden();
       if(typeof laadPubliekeRecepten==='function')await laadPubliekeRecepten();
+      if(typeof laadMeldingenDB==='function')await laadMeldingenDB();
       if(typeof render==='function')render();
     }finally{
       _ptrIcoon().style.animation='';
