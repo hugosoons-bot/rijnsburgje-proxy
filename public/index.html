@@ -51,7 +51,7 @@ a{color:var(--accent);text-decoration:none}
 #hdr-sub{font-size:12px;color:var(--color-bg);margin:4px 0 14px;opacity:.65}
 #tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;padding:0;background:transparent}
 #tabs::-webkit-scrollbar{display:none}
-.tb{padding:10px 16px;background:transparent;color:var(--color-bg);opacity:.6;border:none;font-size:13px;font-weight:500;border-radius:8px 8px 0 0;transition:all .15s;white-space:nowrap;letter-spacing:.01em}
+.tb{padding:10px 16px;background:transparent;color:var(--color-bg);opacity:.6;border:none;font-size:13px;font-weight:500;border-radius:8px 8px 0 0;transition:all .15s;white-space:nowrap;letter-spacing:.01em;position:relative}
 .tb.on{background:var(--bg);color:var(--text);font-weight:600;opacity:1;box-shadow:inset 0 3px 0 var(--color-primary)}
 
 /* ── Content ── */
@@ -83,7 +83,8 @@ a{color:var(--accent);text-decoration:none}
 .rcard-img{height:168px;background:linear-gradient(135deg,var(--surface2) 0%,var(--border2) 100%);display:flex;align-items:center;justify-content:center;position:relative}
 .rcard-img-emoji{font-size:56px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))}
 .sel-badge{position:absolute;top:12px;right:12px;background:var(--accent);color:var(--color-bg);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-.meld-bdg{background:var(--accent);color:var(--color-bg);border-radius:10px;padding:0 5px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle;line-height:1.6}
+.meld-bdg{position:absolute;top:-5px;right:-5px;background:#FF6500;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 3px;box-sizing:border-box;line-height:1;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.meld-bdg.toon{display:flex}
 .meld-nieuw{background:var(--accent-bg) !important;border-color:var(--accent) !important}
 .tijd-sticker{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px);color:var(--color-bg);font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;letter-spacing:.3px;pointer-events:none}
 .week-nav{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:18px;box-shadow:var(--shadow)}
@@ -329,7 +330,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Vrienden</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg" style="display:none"></span></button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg"></span></button>
     </nav>
   </div>
 </div>
@@ -567,7 +568,7 @@ async function kopieerPubliek(id){
   render();
   await savRecept(kopie);
   if(r.eigenaarId&&r.eigenaarId!==S.gebruiker?.id){
-    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:id,recipe_title:r.titel});
+    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:id,recipe_title:r.titel}).then(({error})=>{if(error)console.warn('Kopieer melding:',error.message);});
   }
   alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
@@ -687,7 +688,7 @@ async function toggleLike(recipeId){
     S.likeCounts[recipeId]=(S.likeCounts[recipeId]||0)+1;
     const lr=S.publiekeRecepten.find(x=>x.id===recipeId)||S.menuReceptenMap[recipeId];
     if(lr&&lr.eigenaarId&&lr.eigenaarId!==S.gebruiker.id){
-      DB.from('notifications').upsert({user_id:lr.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'like',recipe_id:recipeId,recipe_title:lr.titel},{onConflict:'actor_id,recipe_id,type',ignoreDuplicates:true});
+      DB.from('notifications').upsert({user_id:lr.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'like',recipe_id:recipeId,recipe_title:lr.titel},{onConflict:'actor_id,recipe_id,type',ignoreDuplicates:true}).then(({error})=>{if(error)console.warn('Like melding:',error.message);});
     }
   }
   rIP();
@@ -1990,7 +1991,7 @@ async function voegVriendReceptToe(){
   render();
   await savRecept(kopie);
   if(r.eigenaarId&&r.eigenaarId!==S.gebruiker.id){
-    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:r.id,recipe_title:r.titel});
+    DB.from('notifications').insert({user_id:r.eigenaarId,actor_id:S.gebruiker.id,actor_name:S.profiel?.display_name||'',type:'copy',recipe_id:r.id,recipe_title:r.titel}).then(({error})=>{if(error)console.warn('Voeg toe melding:',error.message);});
   }
   alert(`"${r.titel}" is toegevoegd aan jouw recepten.`);
 }
@@ -2737,7 +2738,7 @@ function render(){
   document.getElementById('hdr-sub').innerHTML=`<span onclick="setTab('profiel')" style="text-decoration:underline;cursor:pointer;text-underline-offset:2px">${h(naam)}</span> &middot; ${S.recepten.length} recepten`;
   document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',['recepten','weekmenu','boodschappen','vrienden','meldingen'][i]===S.tab));
   const bdg=document.getElementById('meld-bdg');
-  if(bdg){if(S.meldBadge>0){bdg.textContent=S.meldBadge;bdg.style.display='inline';}else bdg.style.display='none';}
+  if(bdg){if(S.meldBadge>0){bdg.textContent=S.meldBadge>99?'99+':S.meldBadge;bdg.classList.add('toon');}else bdg.classList.remove('toon');}
   let html='';
   if(S.tab==='recepten')html=renderRecepten();
   else if(S.tab==='zoeken')html=renderZoeken();
