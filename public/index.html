@@ -491,7 +491,7 @@ const DEMO=[
 // ── State ─────────────────────────────────────────────────────────────────────
 let S={
   tab:'recepten',recepten:[],geselecteerd:[],weekPers:{},
-  fK:'Alle',fC:'Alle',hideNNEK:false,zoekterm:'',
+  fK:'Alle',fC:'Alle',fSter:0,hideNNEK:false,zoekterm:'',
   scherm:'laden',gebruiker:null,profiel:null,
   authTab:'login',authFout:'',authLaden:false,
   menuId:null,lijstId:null,
@@ -504,7 +504,7 @@ let S={
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   publiekeRecepten:[],ladenGemeenschap:false,
-  vriendenFilter:{vriend:'',keuken:'',cat:'',sorteer:'nieuwste'},
+  vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
   feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
@@ -564,7 +564,7 @@ async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
   if(S.toegevoegdeIds.has(id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(id);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
@@ -1678,6 +1678,7 @@ function buildLabels(r){
   return s+'</div>';
 }
 const MICH_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:block"><g transform="translate(12,12)"><ellipse cx="0" cy="-4" rx="2.5" ry="5"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(60)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(120)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(180)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(240)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(300)"/></g></svg>';
+const MICH_SM='<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><g transform="translate(12,12)"><ellipse cx="0" cy="-4" rx="2.5" ry="5"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(60)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(120)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(180)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(240)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(300)"/></g></svg>';
 function buildStars(rating,id){return'<div class="stars">'+[1,2,3].map(n=>`<span class="star${n<=rating?' on':''}" onclick="setRating('${id}',${n})">${MICH_SVG}</span>`).join('')+'</div>';}
 function buildCard(r,opts={}){
   const{op,idx,showSel,showEdit,showDel,stepper,pers,showPubliek,showKopieer,showLike,showAuteur}=opts;
@@ -1759,11 +1760,13 @@ function renderRecepten(){
     if(S.hideNNEK&&rc.includes('Niet nog een keer'))return false;
     if(S.fK!=='Alle'&&r.keuken!==S.fK)return false;
     if(S.fC!=='Alle'&&!rc.includes(S.fC))return false;
+    if(S.fSter>0&&(r.rating||0)!==S.fSter)return false;
     if(zt&&!r.titel.toLowerCase().includes(zt)&&!(r.tags||[]).some(t=>t.toLowerCase().includes(zt)))return false;
     return true;
   });
   const kF=['Alle',...KEUKEN].map(k=>`<button class="fb${S.fK===k?' on':''}" onclick="S.fK='${k}';rIP()">${k}</button>`).join('');
   const cF=['Alle',...CATS].map(c=>`<button class="fb${S.fC===c?' on':''}" onclick="S.fC='${h(c)}';rIP()">${h(c)}</button>`).join('');
+  const stF=[[0,'Alle'],[1,MICH_SM],[2,MICH_SM+MICH_SM],[3,MICH_SM+MICH_SM+MICH_SM]].map(([n,lbl])=>`<button class="fb${S.fSter===n?' on':''}" onclick="S.fSter=${n};rIP()">${lbl}</button>`).join('');
   const searchBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
       <input id="zoek-inp" class="inp" style="flex:1" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()">
       <button class="btn btn-accent" onclick="setTab('zoeken')" style="white-space:nowrap;flex-shrink:0" title="Recept toevoegen">
@@ -1782,6 +1785,7 @@ function renderRecepten(){
     <div class="filter-wrap">
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
+      <h3>Michelin sterren</h3><div class="filter-row">${stF}</div>
     </div>
     ${S.recepten.length===0
       ?`<div class="empty"><span>👨‍🍳</span>Jouw kookboek is nog blanco — tijd om de ketel te vullen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
@@ -1998,7 +2002,7 @@ async function voegVriendReceptToe(){
   const r=S.vriendenReceptModal;if(!r||!S.gebruiker)return;
   if(S.toegevoegdeIds.has(r.id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(r.id);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
@@ -2322,6 +2326,7 @@ function renderVrienden(){
   if(vf.vriend)gefilterd=gefilterd.filter(r=>r.eigenaarId===vf.vriend);
   if(vf.keuken)gefilterd=gefilterd.filter(r=>r.keuken===vf.keuken);
   if(vf.cat)gefilterd=gefilterd.filter(r=>parseCats(r.categorie).includes(vf.cat));
+  if(vf.ster>0)gefilterd=gefilterd.filter(r=>(r.rating||0)===vf.ster);
   gefilterd=[...gefilterd].sort(vf.sorteer==='likes'
     ?(a,b)=>(S.likeCounts[b.id]||0)-(S.likeCounts[a.id]||0)
     :(a,b)=>b.datum.localeCompare(a.datum));
@@ -2350,10 +2355,14 @@ function renderVrienden(){
         ${keukens.map(k=>`<button class="fb${vf.keuken===k?' on':''}" onclick="S.vriendenFilter.keuken='${k}';rIP()">${h(k)}</button>`).join('')}
       </div>`:''}
       ${cats.length?`<h3>📋 Categorie</h3>
-      <div class="filter-row">
+      <div class="filter-row" style="margin-bottom:10px">
         <button class="fb${vf.cat===''?' on':''}" onclick="S.vriendenFilter.cat='';rIP()">Alle</button>
         ${cats.map(c=>`<button class="fb${vf.cat===c?' on':''}" onclick="S.vriendenFilter.cat='${h(c)}';rIP()">${h(c)}</button>`).join('')}
-      </div>`:''}`:'' }
+      </div>`:''}
+      <h3>Michelin sterren</h3>
+      <div class="filter-row">
+        ${[[0,'Alle'],[1,MICH_SM],[2,MICH_SM+MICH_SM],[3,MICH_SM+MICH_SM+MICH_SM]].map(([n,lbl])=>`<button class="fb${vf.ster===n?' on':''}" onclick="S.vriendenFilter.ster=${n};rIP()">${lbl}</button>`).join('')}
+      </div>`:'' }
     </div>`;
   const gemeenschapHTML=S.ladenGemeenschap
     ?'<div class="hint">Kookboek doorbladeren...</div>'
