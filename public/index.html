@@ -1110,10 +1110,6 @@ async function delRec(id){
   delete S.weekPers[id];
   render();
   if(!S.gebruiker)return;
-  // Verwijder eerst afhankelijke rijen (foreign key constraints)
-  await DB.from('recipe_likes').delete().eq('recipe_id',id);
-  await DB.from('notifications').delete().eq('recipe_id',id);
-  await DB.from('week_menu_items').delete().eq('recipe_id',id);
   const{data,error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id).select('id');
   if(error){
     console.error('Verwijderen mislukt:',error.message);
