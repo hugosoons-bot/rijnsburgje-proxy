@@ -1110,20 +1110,17 @@ async function delRec(id){
   delete S.weekPers[id];
   render();
   if(!S.gebruiker)return;
-  // Poging 1: met user_id filter
-  let{data,error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id).select('id');
-  // Poging 2: zonder user_id filter (voor recepten opgeslagen zonder user_id)
-  if(!error&&(!data||data.length===0)){
-    ({data,error}=await DB.from('recipes').delete().eq('id',id).select('id'));
-  }
+  // Verwijder eerst afhankelijke rijen (foreign key constraints)
+  await DB.from('recipe_likes').delete().eq('recipe_id',id);
+  await DB.from('notifications').delete().eq('recipe_id',id);
+  const{data,error}=await DB.from('recipes').delete().eq('id',id).eq('user_id',S.gebruiker.id).select('id');
   if(error){
     console.error('Verwijderen mislukt:',error.message);
     if(backup){S.recepten=[backup,...S.recepten.filter(r=>r.id!==id)];}
     S.fout='Verwijderen mislukt: '+error.message;
     render();
   } else if(!data||data.length===0){
-    // 0 rijen verwijderd zonder fout = RLS blokkeert de delete
-    console.warn('Verwijderen geblokkeerd door Supabase RLS — DELETE policy ontbreekt waarschijnlijk. Recipe id:',id);
+    console.warn('Verwijderen geblokkeerd door Supabase RLS. Recipe id:',id);
     if(backup){S.recepten=[backup,...S.recepten.filter(r=>r.id!==id)];}
     S.fout='Recept kon niet worden verwijderd. Controleer de Supabase DELETE-policy voor de recipes tabel.';
     render();
