@@ -370,6 +370,12 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
         <input id="m-ti" class="inp" placeholder="Nieuwe tag..." onkeydown="if(event.key==='Enter')addMTag()" style="flex:1">
         <button class="btn btn-light" onclick="addMTag()">+ Tag</button>
       </div>
+      <span class="sec-label">🔒 Privé-tags <span style="font-size:10px;font-weight:400;color:var(--text3)">(alleen voor jou zichtbaar)</span></span>
+      <div id="m-pt" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;min-height:20px"></div>
+      <div style="display:flex;gap:7px;margin-bottom:16px">
+        <input id="m-pti" class="inp" placeholder="Nieuwe privé-tag..." onkeydown="if(event.key==='Enter')addMPT()" style="flex:1">
+        <button class="btn btn-light" onclick="addMPT()">+ Tag</button>
+      </div>
       <span class="sec-label">Bereidingstijd</span>
       <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
         <div style="flex:1">
@@ -500,7 +506,7 @@ let S={
   actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,kookModal:null,vriendenReceptModal:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
-  editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,mK:'',mC:[],mTags:[],mIngs:[],mStps:[],
+  editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   publiekeRecepten:[],ladenGemeenschap:false,
@@ -704,6 +710,8 @@ async function loadRecepten(){
   const{data,error}=await DB.from('recipes').select('*').eq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
   if(error){console.error('Laden mislukt:',error.message);S.recepten=DEMO;return;}
   S.recepten=data.map(fromSB);
+  const{data:pt}=await DB.from('recipe_private_tags').select('recipe_id,tags').eq('user_id',S.gebruiker.id);
+  if(pt){const m={};pt.forEach(x=>m[x.recipe_id]=x.tags||[]);S.recepten.forEach(r=>r.privateTags=m[r.id]||[]);}
 }
 async function migreeerNaarPubliek(){
   if(!S.gebruiker)return;
@@ -1145,7 +1153,7 @@ function openEdit(id){
   const r=S.recepten.find(x=>x.id===id);if(!r)return;
   S.editId=id;S.modalFotoBlob=null;
   S.mK=r.keuken||'';S.mC=parseCats(r.categorie);
-  S.mTags=[...(r.tags||[])];
+  S.mTags=[...(r.tags||[])];S.mPriveTags=[...(r.privateTags||[])];
   S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
   S.mStps=[...(r.stappen||[])];
   document.getElementById('m-titel').value=r.titel||'';
@@ -1155,17 +1163,17 @@ function openEdit(id){
   document.getElementById('m-n').value=r.notities||'';
   document.getElementById('m-tb').value=r.tijdBereiding||'';
   document.getElementById('m-tw').value=r.tijdWacht||'';
-  document.getElementById('m-ti').value='';
+  document.getElementById('m-ti').value='';document.getElementById('m-pti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC.includes(c)?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
-  rMT();rMIngs();rMStps();
+  rMT();rMPT();rMIngs();rMStps();
   document.getElementById('mov').classList.add('open');
 }
 function openEditResultaat(idx){
   const r=S.resultaten[idx];if(!r)return;
   S.editId=null;S.editResultIdx=idx;S.modalFotoBlob=null;
   S.mK=r.keuken||'';S.mC=parseCats(r.categorie);
-  S.mTags=[...(r.tags||[])];
+  S.mTags=[...(r.tags||[])];S.mPriveTags=[];
   S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
   S.mStps=[...(r.stappen||[])];
   document.getElementById('m-titel').value=r.titel||'';
@@ -1175,7 +1183,7 @@ function openEditResultaat(idx){
   document.getElementById('m-n').value=r.notities||'';
   document.getElementById('m-tb').value=r.tijdBereiding||'';
   document.getElementById('m-tw').value=r.tijdWacht||'';
-  document.getElementById('m-ti').value='';
+  document.getElementById('m-ti').value='';document.getElementById('m-pti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC.includes(c)?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
   rMT();rMIngs();rMStps();
@@ -1186,6 +1194,9 @@ function tMC(c){const i=S.mC.indexOf(c);if(i>=0)S.mC.splice(i,1);else S.mC.push(
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
 function rmMT(i){S.mTags.splice(i,1);rMT();}
 function addMTag(){const inp=document.getElementById('m-ti'),t=inp.value.trim();if(t&&!S.mTags.includes(t)){S.mTags.push(t);rMT();}inp.value='';}
+function rMPT(){document.getElementById('m-pt').innerHTML=S.mPriveTags.map((t,i)=>`<span class="lbl" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2)">🔒 ${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMPT(${i})">✕</span></span>`).join('');}
+function rmMPT(i){S.mPriveTags.splice(i,1);rMPT();}
+function addMPT(){const inp=document.getElementById('m-pti'),t=inp.value.trim();if(t&&!S.mPriveTags.includes(t)){S.mPriveTags.push(t);rMPT();}inp.value='';}
 function rMIngs(){
   document.getElementById('m-ings').innerHTML=S.mIngs.map((ing,i)=>`
     <div style="display:flex;gap:5px;margin-bottom:5px;align-items:center">
@@ -1228,7 +1239,7 @@ async function saveModal(){
     r.omschrijving=document.getElementById('m-omschr').value.trim();
     r.personen=parseInt(document.getElementById('m-pers').value)||r.personen||4;
     r.afbeelding=document.getElementById('m-img').value.trim();
-    r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;
+    r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.privateTags=S.mPriveTags;
     r.ingredienten=S.mIngs.filter(i=>i.naam.trim());
     r.stappen=S.mStps.filter(s=>s.trim());
     r.notities=document.getElementById('m-n').value;
@@ -1246,7 +1257,12 @@ async function saveModal(){
     if(url){r.afbeelding=url;}
     else{S.fout='Foto uploaden mislukt. Controleer of bucket "recipe-images" bestaat en publiek is in Supabase Storage.';render();return;}
   }
-  sluitModal();render();await savRecept(r);
+  sluitModal();render();await savRecept(r);await slaPriveTagsOp(r.id,r.privateTags||[]);
+}
+async function slaPriveTagsOp(recipeId,tags){
+  if(!S.gebruiker)return;
+  if(tags&&tags.length>0){await DB.from('recipe_private_tags').upsert({recipe_id:recipeId,user_id:S.gebruiker.id,tags},{onConflict:'recipe_id,user_id'});}
+  else{await DB.from('recipe_private_tags').delete().eq('recipe_id',recipeId).eq('user_id',S.gebruiker.id);}
 }
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;S.editResultIdx=null;S.modalFotoBlob=null;}
 function updateMImgPreview(src){
@@ -1669,6 +1685,7 @@ function buildLabels(r){
   if(r.keuken)s+=`<span class="lbl lbl-k">${h(r.keuken)}</span>`;
   parseCats(r.categorie).forEach(c=>{const cls=c==='Niet nog een keer'?'lbl-n':'lbl-c';s+=`<span class="lbl ${cls}">${h(c)}</span>`;});
   (r.tags||[]).forEach(t=>s+=`<span class="lbl lbl-t">${h(t)}</span>`);
+  if(r.privateTags&&r.privateTags.length)r.privateTags.forEach(t=>s+=`<span class="lbl" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:10px">🔒 ${h(t)}</span>`);
   return s+'</div>';
 }
 const MICH_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:block"><g transform="translate(12,12)"><ellipse cx="0" cy="-4" rx="2.5" ry="5"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(60)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(120)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(180)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(240)"/><ellipse cx="0" cy="-4" rx="2.5" ry="5" transform="rotate(300)"/></g></svg>';
@@ -1755,7 +1772,7 @@ function renderRecepten(){
     if(S.fK!=='Alle'&&r.keuken!==S.fK)return false;
     if(S.fC!=='Alle'&&!rc.includes(S.fC))return false;
     if(S.fSter>0&&(r.rating||0)!==S.fSter)return false;
-    if(zt&&!r.titel.toLowerCase().includes(zt)&&!(r.tags||[]).some(t=>t.toLowerCase().includes(zt)))return false;
+    if(zt&&!r.titel.toLowerCase().includes(zt)&&!(r.tags||[]).some(t=>t.toLowerCase().includes(zt))&&!(r.privateTags||[]).some(t=>t.toLowerCase().includes(zt)))return false;
     return true;
   });
   const kF=['Alle',...KEUKEN].map(k=>`<button class="fb${S.fK===k?' on':''}" onclick="S.fK='${k}';rIP()">${k}</button>`).join('');
