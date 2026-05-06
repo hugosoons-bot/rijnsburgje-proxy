@@ -2746,7 +2746,7 @@ function renderOnboardingOverlay(){
           <div class="ob-nav">
             ${!isEerste?`<button class="btn btn-ghost" onclick="stapOnboarding(-1)" style="flex:1">← Vorige</button>`:`<button class="btn btn-ghost" onclick="sluitOnboarding()" style="flex:1">Overslaan</button>`}
             ${isLaatste
-              ?`<button class="btn btn-accent" onclick="sluitOnboarding(true)" style="flex:2">Ga naar Ontdekken →</button>`
+              ?`<button class="btn btn-accent" onclick="sluitOnboarding(true)" style="flex:2">Voeg je favoriete recept toe →</button>`
               :`<button class="btn btn-accent" onclick="stapOnboarding(1)" style="flex:2">${isEerste?'Rondleiding starten →':'Volgende →'}</button>`}
           </div>
         </div>
