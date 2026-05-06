@@ -470,7 +470,7 @@ const DB=supabase.createClient(
 // ── Config ────────────────────────────────────────────────────────────────────
 const SK='rij-v6';
 const KEUKEN=['Aziatisch','Frans','Indiaas','Italiaans','Mediterraans','Mexicaans','Midden-Oosters','Nederlands','Overig'];
-const CATS=['Snel (< 20 min)','Doordeweeks top','Doordeweeks prima','Doordeweeks mwa','Niet nog een keer','Comfort food','Met gasten','Met grote groep','BBQ','Zoet'];
+const CATS=['BBQ','Comfort food','Doordeweeks top','Lang (>45 min)','Met gasten','Met grote groep','Snel (< 20 min)','Zoet'];
 const EMOJI_MAP={Aziatisch:'🍜',Frans:'🥐',Indiaas:'🍛',Italiaans:'🍝',Mediterraans:'🫒',Mexicaans:'🌮',Midden:'🧆',Nederlands:'🧀',Overig:'🍽',default:'🍽'};
 const AFDS=[
   {n:"Groente & Fruit",e:"🥦",k:"#f0faf0",w:["ui","uien","knoflook","gember","tomaat","tomaten","paprika","courgette","aubergine","spinazie","wortel","broccoli","bloemkool","prei","champignon","paddenstoel","sla","komkommer","avocado","citroen","limoen","aardappel","bataat","zoete aardappel","venkel","kool","spruitjes","asperge","basilicum","peterselie","koriander","tijm","rozemarijn","bieslook","lente-ui","sjalot","radicchio","rucola","banaan","bananen","appel","appels","peer","peren","druif","druiven","aardbei","aardbeien","mango","ananas","kiwi","sinaasappel","sinaasappels","mandarijn","mandarijnen","pruim","pruimen","kers","kersen","framboos","frambozen","bosbes","bosbessen","meloen","watermeloen","papaya","passievrucht","vijg","vijgen","granaatappel","rode biet","biet","radijs","radijsjes","maïs","mais","erwten","sperziebonen","boontjes","paksoi","Chinese kool"]},
@@ -1304,14 +1304,14 @@ const SCHEMA_UITLEG=`tijdBereiding: actieve kooktijd in minuten (0 = onbekend). 
 const SYS=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
 Per recept: ${SCHEMA_VELD}
 Keuken: Aziatisch,Frans,Indiaas,Italiaans,Mediterraans,Mexicaans,Midden-Oosters,Nederlands,Overig of leeg.
-Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep,BBQ,Zoet of leeg.
+Categorie: BBQ,Comfort food,Doordeweeks top,Lang (>45 min),Met gasten,Met grote groep,Snel (< 20 min),Zoet of leeg.
 ${SCHEMA_UITLEG}
 Ingrediënten en stappen letterlijk overnemen. Nederlands. Bron: echte werkende URL van de receptpagina.`;
 
 const SYS_URL=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
 Per recept: ${SCHEMA_VELD}
 Keuken: Aziatisch,Frans,Indiaas,Italiaans,Mediterraans,Mexicaans,Midden-Oosters,Nederlands,Overig of leeg.
-Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep,BBQ,Zoet of leeg.
+Categorie: BBQ,Comfort food,Doordeweeks top,Lang (>45 min),Met gasten,Met grote groep,Snel (< 20 min),Zoet of leeg.
 ${SCHEMA_UITLEG}
 ABSOLUTE REGELS — overtreding is niet toegestaan:
 1. Neem ALLEEN ingrediënten over die letterlijk in de aangeleverde tekst staan. Voeg NOOIT een ingrediënt toe dat niet expliciet vermeld wordt.
@@ -1326,7 +1326,7 @@ Datum: gebruik DATUM.`;
 const SYS_FOTO=`Geef ALLEEN een pure JSON array. Geen tekst, geen backticks. Begin met [ eindig met ].
 Per recept: ${SCHEMA_VELD}
 Keuken: Aziatisch,Frans,Indiaas,Italiaans,Mediterraans,Mexicaans,Midden-Oosters,Nederlands,Overig of leeg.
-Categorie: Snel (< 20 min),Doordeweeks top,Doordeweeks prima,Doordeweeks mwa,Niet nog een keer,Comfort food,Met gasten,Met grote groep,BBQ,Zoet of leeg.
+Categorie: BBQ,Comfort food,Doordeweeks top,Lang (>45 min),Met gasten,Met grote groep,Snel (< 20 min),Zoet of leeg.
 ${SCHEMA_UITLEG}
 KRITIEKE REGELS — NOOIT overtreden:
 1. Lees de afbeelding zorgvuldig kolom voor kolom, van boven naar beneden.
