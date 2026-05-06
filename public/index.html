@@ -1734,7 +1734,7 @@ function buildCard(r,opts={}){
       ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Plan dit gerecht</button>`;})():''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
-      ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑</button>`:''}
+      ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
       ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">Lijkt mij lekker →</button>`):''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
