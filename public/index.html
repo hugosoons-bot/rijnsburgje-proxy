@@ -2150,7 +2150,7 @@ function renderBoodschappen(){
       <h2 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text)">Boodschappenlijst</h2>
       <span style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)">${done.length}/${S.shopItems.length} afgevinkt</span>
     </div>
-    ${sRec.length>0?`<div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sRec.map(r=>`<strong>${h(r.titel)}</strong> (${gP(r.id)} pers.)`).join(' + ')}</div>`:''}
+    ${sRec.length>0?`<div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sRec.map(r=>`<div>• <strong>${h(r.titel)}</strong> (${gP(r.id)} pers.)</div>`).join('')}</div>`:''}
 
     <!-- Extra toevoegen -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
