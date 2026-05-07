@@ -573,7 +573,7 @@ async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
   if(S.toegevoegdeIds.has(id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(id);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
@@ -2028,7 +2028,7 @@ async function voegVriendReceptToe(){
   const r=S.vriendenReceptModal;if(!r||!S.gebruiker)return;
   if(S.toegevoegdeIds.has(r.id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0]};
+  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(r.id);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
