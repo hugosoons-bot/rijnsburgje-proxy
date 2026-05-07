@@ -499,7 +499,7 @@ let S={
   tab:'recepten',recepten:[],geselecteerd:[],weekPers:{},
   fK:'Alle',fC:'Alle',fSter:0,hideNNEK:false,zoekterm:'',
   scherm:'laden',gebruiker:null,profiel:null,
-  authTab:'login',authFout:'',authLaden:false,
+  authTab:'login',authFout:'',authLaden:false,resetVerstuurd:false,
   menuId:null,lijstId:null,
   ontdekTab:'url',zoekUrl:'',urlFoutGeblokkeerd:false,
   handmatigeTitel:'',handmatigeTekst:'',handmatigeUrl:'',
@@ -2544,34 +2544,82 @@ async function wijzigWachtwoord(){
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function renderAuth(){
   if(S.scherm==='laden')return'<div class="hint" style="padding-top:40vh">Smaakjes ophalen...</div>';
+  if(S.scherm==='reset')return renderResetScherm();
+  const isForgot=S.authTab==='vergeten';
   return`
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
       <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> 🍳</h1>
       <p style="font-size:12px;color:var(--text3);margin-bottom:24px">Jouw persoonlijke receptenapp</p>
-      <div class="mode-row" style="margin-bottom:20px">
-        <button class="mb${S.authTab==='login'?' on':''}" onclick="S.authTab='login';S.authFout='';rIP()">Inloggen</button>
-        <button class="mb${S.authTab==='register'?' on':''}" onclick="S.authTab='register';S.authFout='';rIP()">Account aanmaken</button>
+      ${isForgot?`
+        ${S.resetVerstuurd?`
+          <div class="box-info" style="margin-bottom:20px">Controleer je e-mail — je ontvangt een link om je wachtwoord opnieuw in te stellen.</div>
+          <button class="btn btn-ghost btn-w" onclick="S.authTab='login';S.resetVerstuurd=false;S.authFout='';rIP()">Terug naar inloggen</button>
+        `:`
+          <h2 style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">Wachtwoord vergeten</h2>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:20px">Vul je e-mailadres in. We sturen je een link om een nieuw wachtwoord in te stellen.</p>
+          <span class="sec-label">E-mailadres</span>
+          <input id="vgt-email" class="inp" style="margin-bottom:16px" type="email" placeholder="jouw@email.nl" onkeydown="if(event.key==='Enter')wachtwoordVergeten()">
+          ${S.authFout?`<div class="box-err" style="margin-bottom:16px">⚠️ ${h(S.authFout)}</div>`:''}
+          <button class="btn btn-accent btn-w" onclick="wachtwoordVergeten()" ${S.authLaden?'disabled':''}>
+            ${S.authLaden?'Even wachten...':'Reset-link versturen →'}
+          </button>
+          <button class="btn btn-ghost btn-w" style="margin-top:8px" onclick="S.authTab='login';S.authFout='';rIP()">Terug</button>
+        `}
+      `:`
+        <div class="mode-row" style="margin-bottom:20px">
+          <button class="mb${S.authTab==='login'?' on':''}" onclick="S.authTab='login';S.authFout='';rIP()">Inloggen</button>
+          <button class="mb${S.authTab==='register'?' on':''}" onclick="S.authTab='register';S.authFout='';rIP()">Account aanmaken</button>
+        </div>
+        ${S.authTab==='register'?`
+          <span class="sec-label">Naam</span>
+          <input id="reg-naam" class="inp" style="margin-bottom:12px" placeholder="bijv. Hugo &amp; Minke" onkeydown="if(event.key==='Enter')registreer()">
+        `:''}
+        <span class="sec-label">E-mailadres</span>
+        <input id="${S.authTab==='login'?'log':'reg'}-email" class="inp" style="margin-bottom:12px" type="email" placeholder="jouw@email.nl" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+        <span class="sec-label">Wachtwoord</span>
+        <div style="position:relative;margin-bottom:${S.authTab==='login'?'8':'20'}px">
+          <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
+          <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;padding:0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;-webkit-tap-highlight-color:transparent" title="Wachtwoord tonen/verbergen">
+            <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+        ${S.authTab==='login'?`<div style="text-align:right;margin-bottom:20px"><button onclick="S.authTab='vergeten';S.authFout='';rIP()" style="background:none;border:none;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit">Wachtwoord vergeten?</button></div>`:''}
+        ${S.authFout?`<div class="box-err" style="margin-bottom:16px">⚠️ ${h(S.authFout)}</div>`:''}
+        <button class="btn btn-accent btn-w" onclick="${S.authTab==='login'?'login()':'registreer()'}" ${S.authLaden?'disabled':''}>
+          ${S.authLaden?'Even wachten...':(S.authTab==='login'?'Inloggen →':'Account aanmaken →')}
+        </button>
+      `}
+    </div>
+  </div>`;
+}
+
+function renderResetScherm(){
+  return`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> 🍳</h1>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:24px">Nieuw wachtwoord instellen</p>
+      <span class="sec-label">Nieuw wachtwoord</span>
+      <div style="position:relative;margin-bottom:12px">
+        <input id="rst-ww1" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="Minimaal 6 tekens" onkeydown="if(event.key==='Enter')document.getElementById('rst-ww2').focus()">
+        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;padding:0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;-webkit-tap-highlight-color:transparent">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
       </div>
-      ${S.authTab==='register'?`
-        <span class="sec-label">Naam</span>
-        <input id="reg-naam" class="inp" style="margin-bottom:12px" placeholder="bijv. Hugo &amp; Minke" onkeydown="if(event.key==='Enter')registreer()">
-      `:''}
-      <span class="sec-label">E-mailadres</span>
-      <input id="${S.authTab==='login'?'log':'reg'}-email" class="inp" style="margin-bottom:12px" type="email" placeholder="jouw@email.nl" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
-      <span class="sec-label">Wachtwoord</span>
+      <span class="sec-label">Bevestig wachtwoord</span>
       <div style="position:relative;margin-bottom:20px">
-        <input id="${S.authTab==='login'?'log':'reg'}-ww" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')${S.authTab==='login'?'login()':'registreer()'}">
-        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;padding:0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;-webkit-tap-highlight-color:transparent" title="Wachtwoord tonen/verbergen">
-          <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
+        <input id="rst-ww2" class="inp" style="margin-bottom:0;padding-right:44px" type="password" placeholder="Herhaal wachtwoord" onkeydown="if(event.key==='Enter')resetWachtwoord()">
+        <button type="button" onclick="toggleWW(this)" style="position:absolute;right:0;top:0;bottom:0;width:44px;padding:0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;-webkit-tap-highlight-color:transparent">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
       ${S.authFout?`<div class="box-err" style="margin-bottom:16px">⚠️ ${h(S.authFout)}</div>`:''}
-      <button class="btn btn-accent btn-w" onclick="${S.authTab==='login'?'login()':'registreer()'}" ${S.authLaden?'disabled':''}>
-        ${S.authLaden?'Even wachten...':(S.authTab==='login'?'Inloggen →':'Account aanmaken →')}
+      <button class="btn btn-accent btn-w" onclick="resetWachtwoord()" ${S.authLaden?'disabled':''}>
+        ${S.authLaden?'Even wachten...':'Wachtwoord opslaan →'}
       </button>
     </div>
   </div>`;
@@ -2630,8 +2678,34 @@ async function login(){
 
 async function uitloggen(){
   await DB.auth.signOut();
-  Object.assign(S,{gebruiker:null,profiel:null,recepten:[],geselecteerd:[],weekPers:{},shopItems:[],extraItems:[],resultaten:[],scherm:'login',authTab:'login',authFout:''});
+  Object.assign(S,{gebruiker:null,profiel:null,recepten:[],geselecteerd:[],weekPers:{},shopItems:[],extraItems:[],resultaten:[],scherm:'login',authTab:'login',authFout:'',resetVerstuurd:false});
   render();
+}
+
+async function wachtwoordVergeten(){
+  const email=document.getElementById('vgt-email')?.value?.trim();
+  if(!email){S.authFout='Vul je e-mailadres in';rIP();return;}
+  S.authLaden=true;S.authFout='';rIP();
+  try{
+    const{error}=await DB.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});
+    if(error)throw error;
+    S.resetVerstuurd=true;
+  }catch(e){S.authFout=e.message||'Er ging iets mis';}
+  finally{S.authLaden=false;rIP();}
+}
+
+async function resetWachtwoord(){
+  const ww1=document.getElementById('rst-ww1')?.value;
+  const ww2=document.getElementById('rst-ww2')?.value;
+  if(!ww1||ww1.length<6){S.authFout='Wachtwoord moet minimaal 6 tekens zijn';rIP();return;}
+  if(ww1!==ww2){S.authFout='Wachtwoorden komen niet overeen';rIP();return;}
+  S.authLaden=true;S.authFout='';rIP();
+  try{
+    const{error}=await DB.auth.updateUser({password:ww1});
+    if(error)throw error;
+    await lod();S.scherm='app';render();
+  }catch(e){S.authFout=e.message||'Er ging iets mis';}
+  finally{S.authLaden=false;render();}
 }
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
@@ -2853,6 +2927,12 @@ window.addEventListener('DOMContentLoaded',async()=>{
     if(wasDrag)e.preventDefault(); // voorkom click-event na drag
   },{passive:false});
   document.addEventListener('touchcancel',()=>_tDragCleanup(false));
+
+  DB.auth.onAuthStateChange((event,session)=>{
+    if(event==='PASSWORD_RECOVERY'){
+      S.scherm='reset';S.authFout='';render();
+    }
+  });
 
   const params=new URLSearchParams(window.location.search);
   if(params.get('volg'))pendingVolgId=params.get('volg');
