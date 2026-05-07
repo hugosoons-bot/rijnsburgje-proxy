@@ -1,0 +1,20 @@
+{
+  "name": "Restaurant 't Rijnsburgje",
+  "short_name": "'t Rijnsburgje",
+  "description": "Jouw persoonlijke receptenapp met weekmenu en boodschappenlijst",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF3D6",
+  "theme_color": "#1A0088",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/publiclogo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "lifestyle"],
+  "lang": "nl"
+}

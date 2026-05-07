@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="'t Rijnsburgje" />
-<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/publiclogo.png" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Restaurant 't Rijnsburgje</title>
@@ -318,7 +318,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:baseline;gap:8px">
         <h1>Restaurant <span>'t Rijnsburgje</span></h1>
-        <span style="font-size:16px">🍴</span>
+        <img src="/publiclogo.png" style="width:28px;height:28px;object-fit:contain;border-radius:50%;display:block;flex-shrink:0" alt="Logo">
       </div>
       <button onclick="startOnboarding()" title="Rondleiding" style="background:none;border:none;cursor:pointer;padding:4px;opacity:.6;color:var(--color-bg);font-size:18px;line-height:1">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -2549,7 +2549,7 @@ function renderAuth(){
   return`
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
-      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> 🍴</h1>
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> <img src="/publiclogo.png" style="width:24px;height:24px;object-fit:contain;border-radius:50%;vertical-align:middle;display:inline-block" alt="Logo"></h1>
       <p style="font-size:12px;color:var(--text3);margin-bottom:24px">Jouw persoonlijke receptenapp</p>
       ${isForgot?`
         ${S.resetVerstuurd?`
@@ -2601,7 +2601,7 @@ function renderResetScherm(){
   return`
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)">
-      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> 🍴</h1>
+      <h1 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--text);margin-bottom:4px">Restaurant <span style="font-style:italic">'t Rijnsburgje</span> <img src="/publiclogo.png" style="width:24px;height:24px;object-fit:contain;border-radius:50%;vertical-align:middle;display:inline-block" alt="Logo"></h1>
       <p style="font-size:12px;color:var(--text3);margin-bottom:24px">Nieuw wachtwoord instellen</p>
       <span class="sec-label">Nieuw wachtwoord</span>
       <div style="position:relative;margin-bottom:12px">
@@ -2712,7 +2712,7 @@ async function resetWachtwoord(){
 const OB_STAPPEN=[
   {
     kleur:'linear-gradient(135deg,#2d1f0e 0%,#4a2e0a 100%)',
-    illu:`<div class="ob-emoji" style="animation:ob-bounce 2s ease-in-out infinite">🍴</div>
+    illu:`<img src="/publiclogo.png" style="width:96px;height:96px;object-fit:contain;border-radius:50%;animation:ob-bounce 2s ease-in-out infinite" alt="Logo">
           <div style="font-family:'Playfair Display',serif;font-size:15px;color:#f5e6c8;font-style:italic;margin-top:4px">'t Rijnsburgje</div>`,
     titel:'Welkom bij de receptenapp!',
     tekst:'Jouw persoonlijke plek voor recepten, weekmenu en boodschappen. We laten je in een paar stappen zien wat je allemaal kunt.',
