@@ -741,6 +741,7 @@ async function lod(){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function sc(v,van,naar){const r=v*(naar/(van||4));return r%1===0?r:parseFloat(r.toFixed(1));}
+function stripGetal(naam,hv){if(!(hv>0))return naam;const s=naam.replace(/^[0-9¼½¾⅓⅔⅛⅜⅝⅞]+([.,][0-9]+)?\s*(x\s+|\s+)/i,'').trim();return s||naam;}
 function getAfd(naam){const n=naam.toLowerCase();for(const a of AFDS){if(a.w.some(w=>n.includes(w)))return a.n;}return"Overig";}
 function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken];return EMOJI_MAP.default;}
 
@@ -1358,7 +1359,7 @@ Regels:
 1. Correcte Nederlandse meervouden wanneer hoeveelheid > 1: ei→eieren, ui→uien, blik→blikken, teen→teentjes, tak→takken, plak→plakken, blaadje→blaadjes, bol→bollen, schijf→schijven
 2. Enkelvoud wanneer hoeveelheid = 1
 3. Behoud de volgorde exact gelijk aan de input
-4. Alleen de productnaam — geen cijfers, geen eenheden`;
+4. Alleen de productnaam — NOOIT cijfers, hoeveelheden of eenheden in de output, ook niet als de invoernaam een getal bevat (bijv. "2 tomaten" → "tomaten")`;
 
 
 async function callAPI(messages,search=false,maxTokens=1200,sysOverride=null){
@@ -1469,11 +1470,12 @@ function bouwShop(){
   sel.forEach(r=>{
     const p=gP(r.id);
     (r.ingredienten||[]).forEach(ing=>{
-      const k=ing.naam.toLowerCase().trim();
+      const cleanNaam=stripGetal(ing.naam.trim(),ing.hoeveelheid);
+      const k=cleanNaam.toLowerCase();
       const hv=parseFloat((ing.hoeveelheid*(p/(r.personen||4))).toFixed(1));
       const uk=map[k]&&map[k].eenheid!==ing.eenheid?k+'_'+ing.eenheid:k;
       if(map[uk]&&map[uk].eenheid===ing.eenheid)map[uk].hoeveelheid=parseFloat((map[uk].hoeveelheid+hv).toFixed(1));
-      else map[uk]={naam:ing.naam,hoeveelheid:hv,eenheid:ing.eenheid,done:false,afd:getAfd(ing.naam),extra:false};
+      else map[uk]={naam:cleanNaam,hoeveelheid:hv,eenheid:ing.eenheid,done:false,afd:getAfd(cleanNaam),extra:false};
     });
   });
   const items=Object.values(map);
@@ -1709,7 +1711,7 @@ function buildCard(r,opts={}){
   const sel=S.geselecteerd.includes(r.id);
   const p=pers||r.personen||4;
   function markOL(t){return h(String(t||'')).replace(/\[ONLEESBAAR:[^\]]*\]/g,'<mark class="onleesbaar">⚠ onleesbaar</mark>');}
-  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${markOL(i.eenheid)}</strong> ${markOL(i.naam)}</li>`).join('');
+  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${markOL(i.eenheid)}</strong> ${markOL(stripGetal(i.naam,i.hoeveelheid))}</li>`).join('');
   const stps=(r.stappen||[]).map(s=>`<li>${markOL(s)}</li>`).join('');
   const cid='c'+r.id.replace(/[^a-z0-9]/gi,'-');
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
@@ -2052,7 +2054,7 @@ function renderKookBody(){
   const r=S.recepten.find(x=>x.id===receptId)||S.menuReceptenMap[receptId];
   if(!r)return;
   const base=r.personen||4;
-  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,base,pers)} ${h(i.eenheid)}</strong> ${h(i.naam)}</li>`).join('');
+  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,base,pers)} ${h(i.eenheid)}</strong> ${h(stripGetal(i.naam,i.hoeveelheid))}</li>`).join('');
   const stps=(r.stappen||[]).map(s=>`<li style="margin-bottom:8px">${h(s)}</li>`).join('');
   document.getElementById('kook-titel').textContent=r.titel;
   document.getElementById('kook-body').innerHTML=`
