@@ -1487,10 +1487,11 @@ function bouwShop(){
     (r.ingredienten||[]).forEach(ing=>{
       const ni=normaliseerIng(ing);
       const k=ni.naam.toLowerCase();
-      const hv=ni.hoeveelheid>0?parseFloat((ni.hoeveelheid*(p/(r.personen||4))).toFixed(1)):0;
+      const mult=parseFloat((p/(r.personen||4)).toFixed(2));
+      const hv=ni.hoeveelheid>0?parseFloat((ni.hoeveelheid*mult).toFixed(1)):0;
       const uk=map[k]&&map[k].eenheid!==ni.eenheid?k+'_'+ni.eenheid:k;
       if(map[uk]&&map[uk].eenheid===ni.eenheid)map[uk].hoeveelheid=parseFloat((map[uk].hoeveelheid+hv).toFixed(1));
-      else map[uk]={naam:ni.naam,hoeveelheid:hv,eenheid:ni.eenheid,done:false,afd:getAfd(ni.naam),extra:false};
+      else map[uk]={naam:ni.naam,hoeveelheid:hv,eenheid:ni.eenheid,...(hv===0?{vermenigvuldiger:mult}:{}),done:false,afd:getAfd(ni.naam),extra:false};
     });
   });
   const items=Object.values(map);
@@ -1538,7 +1539,7 @@ async function slaBoodschappenlijstOp(){
   if(S.shopItems.length>0){
     await DB.from('shopping_items').insert(S.shopItems.map((item,i)=>({
       list_id:lijstId,name:item.naam,
-      amount:`${item.hoeveelheid}${item.eenheid?' '+item.eenheid:''}`,
+      amount:item.hoeveelheid>0?`${item.hoeveelheid}${item.eenheid?' '+item.eenheid:''}`:item.vermenigvuldiger?`×${item.vermenigvuldiger}`:'',
       department:item.afd||'Overig',is_checked:item.done||false,
       sort_order:item.extra?1000+i:i,
     })));
@@ -1551,7 +1552,10 @@ async function herlaadBoodschappen(lijstId){
   if(!data)return;
   S.shopItems=data.map(i=>{
     const m=(i.amount||'').match(/^([\d.]+)\s*(.*)$/);
-    const item={naam:i.name,hoeveelheid:m?parseFloat(m[1]):1,eenheid:m?(m[2]||'').trim():'',done:i.is_checked,extra:i.sort_order>=1000,afd:i.department||'Overig',sbId:i.id};
+    const mV=(i.amount||'').match(/^×([\d.]+)$/);
+    const item={naam:i.name,hoeveelheid:m?parseFloat(m[1]):0,eenheid:m?(m[2]||'').trim():'',
+      ...(mV?{vermenigvuldiger:parseFloat(mV[1])}:{}),
+      done:i.is_checked,extra:i.sort_order>=1000,afd:i.department||'Overig',sbId:i.id};
     if(S.vasteBoodschappen.some(vb=>vb.naam.toLowerCase()===i.name.toLowerCase()))item.vast=true;
     return item;
   });
@@ -2239,7 +2243,7 @@ function renderBoodschappen(){
           <div class="sitem${item.checking?' checking':''}" style="background:${g.k}" data-idx="${item.idx}" draggable="true" ondragstart="startDragShop(${item.idx})" oncontextmenu="return false">
             <span class="sdrag" title="Lang indrukken om te verplaatsen">⠿</span>
             <div class="scb${item.checking?' checking':''}" onclick="toggleShop(${item.idx})">${item.checking||item.done?'✓':''}</div>
-            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${item.hoeveelheid?`<strong>${item.hoeveelheid}${item.eenheid&&item.eenheid!=='x'&&item.eenheid!=='st'?' '+h(item.eenheid):''}</strong> `:''}${h(item.naam)}${item.vast?' <span style="font-size:10px;color:var(--accent)">↻ vast</span>':item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
+            <span class="sname${item.checking?' done':''}" onclick="toggleShop(${item.idx})" style="flex:1">${item.hoeveelheid?`<strong>${item.hoeveelheid}${item.eenheid&&item.eenheid!=='x'&&item.eenheid!=='st'?' '+h(item.eenheid):''}</strong> `:''}${h(item.naam)}${!item.hoeveelheid&&item.vermenigvuldiger&&item.vermenigvuldiger!==1?` <span style="font-size:11px;color:var(--text3)">(${item.vermenigvuldiger%1===0?item.vermenigvuldiger:parseFloat(item.vermenigvuldiger.toFixed(1))}×)</span>`:''}${item.vast?' <span style="font-size:10px;color:var(--accent)">↻ vast</span>':item.extra?' <span style="font-size:10px;color:var(--text3)">(extra)</span>':''}</span>
             <select class="afd-sel" title="Wijzig categorie" onchange="moveShopAfd(${item.idx},this.value)">
               ${AFDS.map(a=>`<option value="${a.n}"${item.afd===a.n?' selected':''}>${a.e} ${a.n}</option>`).join('')}
             </select>
