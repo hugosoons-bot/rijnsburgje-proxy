@@ -741,7 +741,22 @@ async function lod(){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function sc(v,van,naar){const r=v*(naar/(van||4));return r%1===0?r:parseFloat(r.toFixed(1));}
-function stripGetal(naam,hv){if(!(hv>0))return naam;const s=naam.replace(/^[0-9¼½¾⅓⅔⅛⅜⅝⅞]+([.,][0-9]+)?\s*(x\s+|\s+)/i,'').trim();return s||naam;}
+function fracToNum(s){const f={'¼':.25,'½':.5,'¾':.75,'⅓':.333,'⅔':.667,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875};return f[s]||parseFloat(String(s).replace(',','.'));}
+function normaliseerIng(ing){
+  const naam=(ing.naam||'').trim(),eu=(ing.eenheid||'').trim();
+  // Normale ingredienten: strip overbodig getal vooraan naam (bijv. "2 tomaten" → "tomaten")
+  if(eu!=='x'){if(!(ing.hoeveelheid>0))return ing;const s=naam.replace(/^[0-9¼½¾⅓⅔⅛⅜⅝⅞]+([.,][0-9]+)?\s*(x\s+|\s+)/i,'').trim();return{...ing,naam:s||naam};}
+  // eenheid='x': AI kon niet parsen, hoeveelheid zit in de naam — probeer te extraheren
+  const EU='g|ml|kg|l|dl|cl|el|tl|st|stuks?|blik|tak|takje|teentje|bosje|plak';
+  // "400g zalm" of "400 g zalm"
+  const m=naam.match(new RegExp('^([0-9¼½¾⅓⅔⅛⅜⅝⅞]+(?:[.,][0-9]+)?)\\s*('+EU+')\\.?\\s+(.+)','i'));
+  if(m){const hv=fracToNum(m[1]);const n=m[3].trim();if(hv>0&&n)return{...ing,hoeveelheid:hv,eenheid:m[2].toLowerCase(),naam:n};}
+  // "2 zalmfilets" (geen eenheid, alleen getal + naam)
+  const m2=naam.match(/^([0-9¼½¾⅓⅔⅛⅜⅝⅞]+(?:[.,][0-9]+)?)\s+([^0-9].+)/);
+  if(m2){const hv=fracToNum(m2[1]);const n=m2[2].trim();if(hv>0&&n)return{...ing,hoeveelheid:hv,eenheid:'',naam:n};}
+  // Vage hoeveelheid ("naar smaak", "handjevol"): toon als tekst, geen schaling
+  return{...ing,hoeveelheid:0,eenheid:'',naam};
+}
 function getAfd(naam){const n=naam.toLowerCase();for(const a of AFDS){if(a.w.some(w=>n.includes(w)))return a.n;}return"Overig";}
 function getEmoji(r){if(r.keuken&&EMOJI_MAP[r.keuken])return EMOJI_MAP[r.keuken];return EMOJI_MAP.default;}
 
@@ -1331,7 +1346,7 @@ ABSOLUTE REGELS — overtreding is niet toegestaan:
 1. Neem ALLEEN ingrediënten over die letterlijk in de aangeleverde tekst staan. Voeg NOOIT een ingrediënt toe dat niet expliciet vermeld wordt.
 2. Neem hoeveelheden EXACT over zoals ze in de tekst staan. Verander NOOIT een hoeveelheid.
 3. Neem eenheden EXACT over (g, ml, el, tl, stuks, etc.). Verander NOOIT een eenheid.
-4. Als een ingrediënt of hoeveelheid niet duidelijk leesbaar is: zet de ruwe tekst in het naam-veld, hoeveelheid=1, eenheid="x". Gok nooit.
+4. Scheid altijd: hoeveelheid (getal), eenheid (g/ml/el/tl/st/…) en naam (alleen de productnaam, geen getallen). Bijv. "400g zalm" → hoeveelheid:400, eenheid:"g", naam:"zalm". Alleen als volledig onparseerbaar: ruwe tekst in naam, hoeveelheid=1, eenheid="x".
 5. tijdBereiding en tijdWacht invullen als vermeld, anders 0.
 6. Zet de introductietekst of beschrijving van het recept in het notities-veld.
 7. Als de tekst geen herkenbaar recept bevat: geef een lege array [].
@@ -1470,12 +1485,12 @@ function bouwShop(){
   sel.forEach(r=>{
     const p=gP(r.id);
     (r.ingredienten||[]).forEach(ing=>{
-      const cleanNaam=stripGetal(ing.naam.trim(),ing.hoeveelheid);
-      const k=cleanNaam.toLowerCase();
-      const hv=parseFloat((ing.hoeveelheid*(p/(r.personen||4))).toFixed(1));
-      const uk=map[k]&&map[k].eenheid!==ing.eenheid?k+'_'+ing.eenheid:k;
-      if(map[uk]&&map[uk].eenheid===ing.eenheid)map[uk].hoeveelheid=parseFloat((map[uk].hoeveelheid+hv).toFixed(1));
-      else map[uk]={naam:cleanNaam,hoeveelheid:hv,eenheid:ing.eenheid,done:false,afd:getAfd(cleanNaam),extra:false};
+      const ni=normaliseerIng(ing);
+      const k=ni.naam.toLowerCase();
+      const hv=ni.hoeveelheid>0?parseFloat((ni.hoeveelheid*(p/(r.personen||4))).toFixed(1)):0;
+      const uk=map[k]&&map[k].eenheid!==ni.eenheid?k+'_'+ni.eenheid:k;
+      if(map[uk]&&map[uk].eenheid===ni.eenheid)map[uk].hoeveelheid=parseFloat((map[uk].hoeveelheid+hv).toFixed(1));
+      else map[uk]={naam:ni.naam,hoeveelheid:hv,eenheid:ni.eenheid,done:false,afd:getAfd(ni.naam),extra:false};
     });
   });
   const items=Object.values(map);
@@ -1711,7 +1726,7 @@ function buildCard(r,opts={}){
   const sel=S.geselecteerd.includes(r.id);
   const p=pers||r.personen||4;
   function markOL(t){return h(String(t||'')).replace(/\[ONLEESBAAR:[^\]]*\]/g,'<mark class="onleesbaar">⚠ onleesbaar</mark>');}
-  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,r.personen||4,p)} ${markOL(i.eenheid)}</strong> ${markOL(stripGetal(i.naam,i.hoeveelheid))}</li>`).join('');
+  const ings=(r.ingredienten||[]).map(i=>{const ni=normaliseerIng(i);return`<li>${ni.hoeveelheid?`<strong>${sc(ni.hoeveelheid,r.personen||4,p)} ${markOL(ni.eenheid)}</strong> `:''}${markOL(ni.naam)}</li>`;}).join('');
   const stps=(r.stappen||[]).map(s=>`<li>${markOL(s)}</li>`).join('');
   const cid='c'+r.id.replace(/[^a-z0-9]/gi,'-');
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
@@ -2054,7 +2069,7 @@ function renderKookBody(){
   const r=S.recepten.find(x=>x.id===receptId)||S.menuReceptenMap[receptId];
   if(!r)return;
   const base=r.personen||4;
-  const ings=(r.ingredienten||[]).map(i=>`<li><strong>${sc(i.hoeveelheid,base,pers)} ${h(i.eenheid)}</strong> ${h(stripGetal(i.naam,i.hoeveelheid))}</li>`).join('');
+  const ings=(r.ingredienten||[]).map(i=>{const ni=normaliseerIng(i);return`<li>${ni.hoeveelheid?`<strong>${sc(ni.hoeveelheid,base,pers)} ${h(ni.eenheid)}</strong> `:''}${h(ni.naam)}</li>`;}).join('');
   const stps=(r.stappen||[]).map(s=>`<li style="margin-bottom:8px">${h(s)}</li>`).join('');
   document.getElementById('kook-titel').textContent=r.titel;
   document.getElementById('kook-body').innerHTML=`
