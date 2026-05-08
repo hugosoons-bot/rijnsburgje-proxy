@@ -1167,7 +1167,7 @@ function toggleSel(id){
   render();slaWeekmenuOp();
 }
 function gP(id){return S.weekPers[id]||S.recepten.find(r=>r.id===id)?.personen||4;}
-function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));render();slaWeekmenuOp();}
+function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));bouwShop();render();slaWeekmenuOp();if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();}
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openEdit(id){
@@ -1480,7 +1480,7 @@ async function verwerkTekst(){
 
 // ── Boodschappen ──────────────────────────────────────────────────────────────
 function bouwShop(){
-  const sel=S.recepten.filter(r=>S.geselecteerd.includes(r.id));
+  const sel=S.geselecteerd.map(id=>S.recepten.find(r=>r.id===id)||S.menuReceptenMap[id]).filter(Boolean);
   const map={};
   sel.forEach(r=>{
     const p=gP(r.id);
