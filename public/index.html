@@ -1303,8 +1303,8 @@ function updateMImgPreview(src){
   const el=document.getElementById('m-img-preview');if(!el)return;
   if(!src){el.innerHTML='';return;}
   el.innerHTML=`<div style="margin-bottom:4px">
-    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Tik op de foto om het middelpunt van de uitsnede in te stellen</div>
-    <div class="crop-wrap" onclick="modalTapCrop(event)" ontouchend="modalTapCrop(event)">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Tik of sleep om te verplaatsen</div>
+    <div class="crop-wrap" onclick="modalTapCrop(event)" ontouchmove="modalTapCrop(event)" ontouchend="modalTapCrop(event)">
       <img id="m-crop-img" class="crop-img" src="${src}" style="object-position:${S.modalCropX}% ${S.modalCropY}%" onerror="this.closest('.crop-wrap').innerHTML='<span style=color:var(--text3);font-size:12px>Afbeelding niet beschikbaar</span>'">
     </div>
     <div id="m-crop-lbl" style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">${S.modalCropX}% links–rechts · ${S.modalCropY}% boven–onder</div>
