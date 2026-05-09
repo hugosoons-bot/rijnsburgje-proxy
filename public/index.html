@@ -509,7 +509,7 @@ let S={
   actieveWeek:null,receptWeek:{},receptDagen:{},calPicker:null,dagPickerDatum:null,vriendenSubTab:null,kookModal:null,vriendenReceptModal:null,
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
-  editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
+  editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,modalCropX:50,modalCropY:50,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   sortKookboek:'nieuwste',
@@ -1174,6 +1174,7 @@ function sP(id,v){S.weekPers[id]=Math.max(1,Math.min(20,parseInt(v)||4));bouwSho
 function openEdit(id){
   const r=S.recepten.find(x=>x.id===id);if(!r)return;
   S.editId=id;S.modalFotoBlob=null;
+  initModalCrop(r.afbeeldingPositie||localStorage.getItem('crop-pos-'+r.id)||'');
   S.mK=r.keuken||'';S.mC=parseCats(r.categorie);
   S.mTags=[...(r.tags||[])];S.mPriveTags=[...(r.privateTags||[])];
   S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
@@ -1195,6 +1196,7 @@ function openEdit(id){
 function openEditResultaat(idx){
   const r=S.resultaten[idx];if(!r)return;
   S.editId=null;S.editResultIdx=idx;S.modalFotoBlob=null;
+  initModalCrop(r.afbeeldingPositie||'');
   S.mK=r.keuken||'';S.mC=parseCats(r.categorie);
   S.mTags=[...(r.tags||[])];S.mPriveTags=[];
   S.mIngs=(r.ingredienten||[]).map(i=>({...i}));
@@ -1263,6 +1265,7 @@ async function saveModal(){
     r.omschrijving=document.getElementById('m-omschr').value.trim();
     r.personen=parseInt(document.getElementById('m-pers').value)||r.personen||4;
     r.afbeelding=document.getElementById('m-img').value.trim();
+    r.afbeeldingPositie=`${S.modalCropX}% ${S.modalCropY}%`;
     r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.privateTags=S.mPriveTags;
     r.ingredienten=S.mIngs.filter(i=>i.naam.trim());
     r.stappen=S.mStps.filter(s=>s.trim());
@@ -1283,6 +1286,7 @@ async function saveModal(){
     else{S.fout='Foto uploaden mislukt. Controleer of bucket "recipe-images" bestaat en publiek is in Supabase Storage.';render();return;}
   }
   sluitModal();render();await savRecept(r);await slaPriveTagsOp(r.id,r.privateTags||[]);await slaPriveNotitiesOp(r.id,r.privéNotities||'');
+  try{localStorage.setItem('crop-pos-'+r.id,r.afbeeldingPositie);}catch(e){}
 }
 async function slaPriveTagsOp(recipeId,tags){
   if(!S.gebruiker)return;
@@ -1297,12 +1301,20 @@ async function slaPriveNotitiesOp(recipeId,notes){
 function sluitModal(){document.getElementById('mov').classList.remove('open');S.editId=null;S.editResultIdx=null;S.modalFotoBlob=null;}
 function updateMImgPreview(src){
   const el=document.getElementById('m-img-preview');if(!el)return;
-  el.innerHTML=src?`<img src="${src}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius);margin-bottom:4px" onerror="this.style.display='none'">`:'';
+  if(!src){el.innerHTML='';return;}
+  el.innerHTML=`<div style="margin-bottom:4px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Tik op de foto om het middelpunt van de uitsnede in te stellen</div>
+    <div class="crop-wrap" onclick="modalTapCrop(event)" ontouchend="modalTapCrop(event)">
+      <img id="m-crop-img" class="crop-img" src="${src}" style="object-position:${S.modalCropX}% ${S.modalCropY}%" onerror="this.closest('.crop-wrap').innerHTML='<span style=color:var(--text3);font-size:12px>Afbeelding niet beschikbaar</span>'">
+    </div>
+    <div id="m-crop-lbl" style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">${S.modalCropX}% links–rechts · ${S.modalCropY}% boven–onder</div>
+  </div>`;
 }
 async function modalFotoGekozen(input){
   const file=input.files[0];if(!file)return;
   const dataUrl=await fileNaarDataUrl(file,1200);
   S.modalFotoBlob=dataUrlNaarBlob(dataUrl);
+  S.modalCropX=50;S.modalCropY=50;
   updateMImgPreview(dataUrl);
   input.value='';
 }
@@ -1737,7 +1749,7 @@ function buildCard(r,opts={}){
   return`<div class="rcard${sel?' sel':''}" id="${cid}">
     ${sel?'<div class="sel-badge">✓</div>':''}
     <div class="rcard-img">${r.afbeelding
-      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:cover;object-position:${h(r.afbeeldingPositie||'center')};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
+      ?`<img src="${h(r.afbeelding)}" alt="${h(r.titel)}" style="width:100%;height:100%;object-fit:cover;object-position:${h(r.afbeeldingPositie||(()=>{try{return localStorage.getItem('crop-pos-'+r.id)||'center';}catch{return'center';}})())};background:var(--surface2)" onerror="this.parentElement.innerHTML='<span class=rcard-img-emoji>${getEmoji(r)}</span>'">`
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
       ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}
       ${showAuteur&&r.auteursNaam?`<div class="rcard-auteur">👤 ${h(r.auteursNaam)}</div>`:''}
@@ -1880,6 +1892,21 @@ function fotoTapCrop(e){
   // Don't call rIP() to avoid re-render during touch
 }
 function fotoTapCropEnd(){rIP();}
+function initModalCrop(pos){
+  const m=(pos||'').match(/^(\d+)%\s+(\d+)%$/);
+  S.modalCropX=m?parseInt(m[1]):50;S.modalCropY=m?parseInt(m[2]):50;
+}
+function modalTapCrop(e){
+  const r=e.currentTarget.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  const cy=e.touches?e.touches[0].clientY:e.clientY;
+  S.modalCropX=Math.round((cx-r.left)/r.width*100);
+  S.modalCropY=Math.round((cy-r.top)/r.height*100);
+  const img=document.getElementById('m-crop-img');
+  if(img)img.style.objectPosition=`${S.modalCropX}% ${S.modalCropY}%`;
+  const lbl=document.getElementById('m-crop-lbl');
+  if(lbl)lbl.textContent=`${S.modalCropX}% links–rechts · ${S.modalCropY}% boven–onder`;
+}
 function telOnleesbaar(r){
   if(!r)return 0;let n=0;
   const chk=v=>{if(typeof v==='string'&&v.includes('[ONLEESBAAR'))n++;};
