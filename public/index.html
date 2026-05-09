@@ -2392,17 +2392,18 @@ function renderVrienden(){
         <div class="cards-grid">${menu.recepten.map(r=>buildCard(r,{showKopieer:true,showLike:true})).join('')}</div>
       </div>`).join('');
   const filterBar=`<div class="filter-wrap">
+      <h3>👤 Chefs</h3>
+      <div class="filter-row" style="margin-bottom:10px">
+        <button class="fb${vf.vriend===''?' on':''}" onclick="S.vriendenFilter.vriend='';rIP()">Alle</button>
+        ${S.ikVolg.map(p=>`<button class="fb${vf.vriend===p.id?' on':''}" onclick="S.vriendenFilter.vriend='${p.id}';rIP()">${h(p.display_name)}</button>`).join('')}
+      </div>
       <h3>↕️ Sorteren</h3>
       <div class="filter-row" style="margin-bottom:10px">
         <button class="fb${vf.sorteer==='nieuwste'?' on':''}" onclick="S.vriendenFilter.sorteer='nieuwste';rIP()">Nieuwste</button>
         <button class="fb${vf.sorteer==='likes'?' on':''}" onclick="S.vriendenFilter.sorteer='likes';rIP()">Meeste likes</button>
         <button class="fb${vf.sorteer==='dezeweek'?' on':''}" onclick="S.vriendenFilter.sorteer='dezeweek';rIP()">Deze week</button>
       </div>
-      ${vf.sorteer!=='dezeweek'?`<h3>👤 Chefs</h3>
-      <div class="filter-row" style="margin-bottom:10px">
-        <button class="fb${vf.vriend===''?' on':''}" onclick="S.vriendenFilter.vriend='';rIP()">Alle</button>
-        ${S.ikVolg.map(p=>`<button class="fb${vf.vriend===p.id?' on':''}" onclick="S.vriendenFilter.vriend='${p.id}';rIP()">${h(p.display_name)}</button>`).join('')}
-      </div>
+      ${vf.sorteer!=='dezeweek'?`
       ${keukens.length?`<h3>🌍 Keuken</h3>
       <div class="filter-row" style="margin-bottom:10px">
         <button class="fb${vf.keuken===''?' on':''}" onclick="S.vriendenFilter.keuken='';rIP()">Alle</button>
