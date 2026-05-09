@@ -308,9 +308,9 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
 </style>
 </head>
 <body>
-<div id="ptr" style="position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;padding-top:12px;z-index:999;pointer-events:none;opacity:0;transition:opacity .2s">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;box-shadow:var(--shadow)">
-    <span id="ptr-icoon" style="display:inline-block;transition:transform .2s">↓</span> <span id="ptr-tekst">Trek naar beneden</span>
+<div id="ptr" style="position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;padding-top:6px;z-index:999;pointer-events:none;opacity:0;transition:opacity .15s">
+  <div style="width:34px;height:34px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center">
+    <div id="ptr-spin" style="width:18px;height:18px;border:2.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%"></div>
   </div>
 </div>
 
@@ -3041,14 +3041,10 @@ window.addEventListener('DOMContentLoaded',async()=>{
   let _ptrY=0,_ptrActief=false,_ptrGereed=false;
   const PTR_DREMPEL=80;
   const _ptrEl=()=>document.getElementById('ptr');
-  const _ptrIcoon=()=>document.getElementById('ptr-icoon');
-  const _ptrTekst=()=>document.getElementById('ptr-tekst');
+  const _ptrSpin=()=>document.getElementById('ptr-spin');
   const _scrollTop=()=>Math.max(window.scrollY,document.documentElement.scrollTop,document.body.scrollTop);
   document.addEventListener('touchstart',e=>{
-    if(_scrollTop()<=1){
-      _ptrY=e.touches[0].clientY;
-      _ptrActief=true;_ptrGereed=false;
-    }
+    if(_scrollTop()<=1){_ptrY=e.touches[0].clientY;_ptrActief=true;_ptrGereed=false;}
   },{passive:true});
   document.addEventListener('touchmove',e=>{
     if(!_ptrActief)return;
@@ -3058,20 +3054,16 @@ window.addEventListener('DOMContentLoaded',async()=>{
     e.preventDefault();
     const progress=Math.min(dy/PTR_DREMPEL,1);
     const el=_ptrEl();
-    el.style.opacity=Math.min(progress*1.8,1);
-    el.style.transform=`translateY(${Math.min(dy*0.35,44)}px)`;
+    el.style.opacity=Math.min(progress*2,1);
+    el.style.transform=`translateY(${Math.min(dy*0.4,48)}px)`;
     _ptrGereed=dy>=PTR_DREMPEL;
-    _ptrIcoon().style.transform=_ptrGereed?'rotate(180deg)':'rotate(0deg)';
-    _ptrTekst().textContent=_ptrGereed?'Loslaten om te verversen':'Trek naar beneden';
   },{passive:false});
   document.addEventListener('touchend',async()=>{
     if(!_ptrActief)return;
     _ptrActief=false;
     const el=_ptrEl();
     if(!_ptrGereed){el.style.opacity=0;el.style.transform='';return;}
-    _ptrIcoon().style.transform='';
-    _ptrTekst().textContent='Verversen...';
-    _ptrIcoon().style.animation='ptr-spin 0.7s linear infinite';
+    _ptrSpin().style.animation='ptr-spin 0.7s linear infinite';
     try{
       if(typeof loadRecepten==='function')await loadRecepten();
       if(typeof laadWeekmenu==='function')await laadWeekmenu();
@@ -3081,7 +3073,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
       if(typeof laadMeldingenDB==='function')await laadMeldingenDB();
       if(typeof render==='function')render();
     }finally{
-      _ptrIcoon().style.animation='';
+      _ptrSpin().style.animation='';
       el.style.opacity=0;el.style.transform='';
     }
   });
