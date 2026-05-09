@@ -512,6 +512,7 @@ let S={
   editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
+  sortKookboek:'nieuwste',
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
@@ -1810,9 +1811,14 @@ function renderRecepten(){
     if(zt&&!r.titel.toLowerCase().includes(zt)&&!(r.tags||[]).some(t=>t.toLowerCase().includes(zt))&&!(r.privateTags||[]).some(t=>t.toLowerCase().includes(zt)))return false;
     return true;
   });
+  const gesorteerd=[...gef].sort(
+    S.sortKookboek==='likes'  ?(a,b)=>(S.likeCounts[b.id]||0)-(S.likeCounts[a.id]||0)
+    :S.sortKookboek==='sterren'?(a,b)=>(b.rating||0)-(a.rating||0)
+    :(a,b)=>(b.datum||'').localeCompare(a.datum||''));
   const kF=['Alle',...KEUKEN].map(k=>`<button class="fb${S.fK===k?' on':''}" onclick="S.fK='${k}';rIP()">${k}</button>`).join('');
   const cF=['Alle',...CATS].map(c=>`<button class="fb${S.fC===c?' on':''}" onclick="S.fC='${h(c)}';rIP()">${h(c)}</button>`).join('');
   const stF=[[0,'Alle'],[1,MICH_SM],[2,MICH_SM+MICH_SM],[3,MICH_SM+MICH_SM+MICH_SM]].map(([n,lbl])=>`<button class="fb${S.fSter===n?' on':''}" onclick="S.fSter=${n};rIP()">${lbl}</button>`).join('');
+  const sortF=[['nieuwste','Nieuwste'],['sterren','Sterren'],['likes','Likes']].map(([v,lbl])=>`<button class="fb${S.sortKookboek===v?' on':''}" onclick="S.sortKookboek='${v}';rIP()">${lbl}</button>`).join('');
   const searchBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
       <input id="zoek-inp" class="inp" style="flex:1" placeholder="Zoek op naam of tag..." value="${h(S.zoekterm)}" oninput="S.zoekterm=this.value;rIP()">
       <button class="btn btn-accent" onclick="setTab('zoeken')" style="white-space:nowrap;flex-shrink:0" title="Recept toevoegen">
@@ -1832,13 +1838,14 @@ function renderRecepten(){
     <div class="filter-wrap">
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
-      <h3>Michelin sterren</h3><div class="filter-row">${stF}</div>
+      <h3>Michelin sterren</h3><div class="filter-row" style="margin-bottom:10px">${stF}</div>
+      <h3>Sorteren</h3><div class="filter-row">${sortF}</div>
     </div>
     ${S.recepten.length===0
       ?`<div class="empty"><span>👨‍🍴</span>Jouw kookboek is nog blanco — tijd om de ketel te vullen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
       :gef.length===0
         ?'<div class="empty"><span>📭</span>De pan is nog leeg</div>'
-        :`<div class="cards-grid feed-grid">${gef.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
+        :`<div class="cards-grid feed-grid">${gesorteerd.map(r=>buildCard(r,{showSel:true,showEdit:true,showDel:true,showPubliek:true})).join('')}</div>`}`;
 }
 
 // ── Foto import ───────────────────────────────────────────────────────────────
