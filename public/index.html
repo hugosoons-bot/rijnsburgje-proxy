@@ -1836,10 +1836,10 @@ function renderRecepten(){
     ${searchBar}
     ${S.fout?`<div class="box-err">⚠️ ${h(S.fout)} <button class="btn btn-ghost" style="margin-left:8px;font-size:12px" onclick="S.fout='';rIP()">✕</button></div>`:''}
     <div class="filter-wrap">
+      <h3>↕️ Sorteren</h3><div class="filter-row" style="margin-bottom:10px">${sortF}</div>
       <h3>🌍 Keuken</h3><div class="filter-row" style="margin-bottom:10px">${kF}</div>
       <h3>📋 Categorie</h3><div class="filter-row" style="margin-bottom:10px">${cF}</div>
-      <h3>Michelin sterren</h3><div class="filter-row" style="margin-bottom:10px">${stF}</div>
-      <h3>Sorteren</h3><div class="filter-row">${sortF}</div>
+      <h3>${MICH_SM} Sterren</h3><div class="filter-row">${stF}</div>
     </div>
     ${S.recepten.length===0
       ?`<div class="empty"><span>👨‍🍴</span>Jouw kookboek is nog blanco — tijd om de ketel te vullen.<br><br><button class="btn btn-dark" onclick="setTab('zoeken')">Recepten importeren →</button></div>`
@@ -2413,7 +2413,7 @@ function renderVrienden(){
         <button class="fb${vf.cat===''?' on':''}" onclick="S.vriendenFilter.cat='';rIP()">Alle</button>
         ${cats.map(c=>`<button class="fb${vf.cat===c?' on':''}" onclick="S.vriendenFilter.cat='${h(c)}';rIP()">${h(c)}</button>`).join('')}
       </div>`:''}
-      <h3>Michelin sterren</h3>
+      <h3>${MICH_SM} Sterren</h3>
       <div class="filter-row">
         ${[[0,'Alle'],[1,MICH_SM],[2,MICH_SM+MICH_SM],[3,MICH_SM+MICH_SM+MICH_SM]].map(([n,lbl])=>`<button class="fb${vf.ster===n?' on':''}" onclick="S.vriendenFilter.ster=${n};rIP()">${lbl}</button>`).join('')}
       </div>`:'' }
