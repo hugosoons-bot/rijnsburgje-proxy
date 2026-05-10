@@ -2906,6 +2906,17 @@ function renderOnboardingOverlay(){
   const bestaand=document.getElementById('ob-ovl');
   if(bestaand){bestaand.outerHTML=html;}
   else{document.body.insertAdjacentHTML('beforeend',html);}
+
+  // Swipe-navigatie
+  const kaart=document.querySelector('#ob-ovl .ob-kaart');
+  if(kaart){
+    let startX=0;
+    kaart.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;},{passive:true});
+    kaart.addEventListener('touchend',e=>{
+      const dx=e.changedTouches[0].clientX-startX;
+      if(Math.abs(dx)>50){stapOnboarding(dx<0?1:-1);}
+    },{passive:true});
+  }
 }
 
 function startOnboarding(){
