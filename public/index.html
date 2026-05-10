@@ -510,7 +510,7 @@ let S={
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,modalCropX:50,modalCropY:50,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
-  shopItems:[],extraItems:[],vasteBoodschappen:[],bevestigVast:null,toonAfgevinkt:true,
+  shopItems:[],extraItems:[],vasteBoodschappen:[],vastInactief:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   sortKookboek:'nieuwste',
   publiekeRecepten:[],ladenGemeenschap:false,
@@ -524,6 +524,7 @@ let S={
 function sav(){
   try{localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}
   try{localStorage.setItem(SK+'-vb',JSON.stringify(S.vasteBoodschappen));}catch(e){}
+  try{localStorage.setItem(SK+'-vi',JSON.stringify(S.vastInactief));}catch(e){}
 }
 
 function parseCats(v){if(!v)return[];if(Array.isArray(v))return v;try{const p=JSON.parse(v);return Array.isArray(p)?p:[p].filter(Boolean);}catch{return[v];}}
@@ -729,6 +730,7 @@ async function migreeerNaarPubliek(){
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-vb');if(v)S.vasteBoodschappen=JSON.parse(v);}catch{}
+  try{const v=localStorage.getItem(SK+'-vi');if(v)S.vastInactief=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-toegevoegd');if(v)S.toegevoegdeIds=new Set(JSON.parse(v));}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
@@ -1512,7 +1514,7 @@ function bouwShop(){
   // Voeg vaste boodschappen toe die nog niet in extraItems zitten
   const extraNamen=new Set(S.extraItems.map(e=>e.naam.toLowerCase()));
   S.vasteBoodschappen.forEach(vb=>{
-    if(!extraNamen.has(vb.naam.toLowerCase())){
+    if(!extraNamen.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase())){
       S.extraItems.push({...vb,extra:true,vast:true,done:false});
     }
   });
@@ -1575,7 +1577,7 @@ async function herlaadBoodschappen(lijstId){
   S.extraItems=S.shopItems.filter(i=>i.extra);
   // Injecteer vaste boodschappen die ontbreken (bijv. na terugkeer naar een oude week)
   const bestaand=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
-  const toVoegen=S.vasteBoodschappen.filter(vb=>!bestaand.has(vb.naam.toLowerCase()));
+  const toVoegen=S.vasteBoodschappen.filter(vb=>!bestaand.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase()));
   if(toVoegen.length){
     const rijen=toVoegen.map((vb,i)=>({
       list_id:lijstId,name:vb.naam,
@@ -1721,9 +1723,30 @@ function bevestigVastBoodschap(ja){
   }
   S.bevestigVast=null;rIP();
 }
+function toggleVastActief(naam){
+  const k=naam.toLowerCase();
+  if(S.vastInactief.includes(k))S.vastInactief=S.vastInactief.filter(n=>n!==k);
+  else S.vastInactief.push(k);
+  sav();
+  // Verwijder of voeg toe aan huidige lijst
+  S.shopItems=S.shopItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
+  S.extraItems=S.extraItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
+  if(!S.vastInactief.includes(k)){
+    const vb=S.vasteBoodschappen.find(v=>v.naam.toLowerCase()===k);
+    if(vb){const item={...vb,extra:true,vast:true,done:false};S.extraItems.push(item);S.shopItems.push(item);}
+  }
+  if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
+  rIP();
+}
 function verwijderUitVast(naam){
-  S.vasteBoodschappen=S.vasteBoodschappen.filter(v=>v.naam.toLowerCase()!==naam.toLowerCase());
-  sav();rIP();
+  const k=naam.toLowerCase();
+  S.vasteBoodschappen=S.vasteBoodschappen.filter(v=>v.naam.toLowerCase()!==k);
+  S.vastInactief=S.vastInactief.filter(n=>n!==k);
+  S.shopItems=S.shopItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
+  S.extraItems=S.extraItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
+  sav();
+  if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
+  rIP();
 }
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
@@ -2204,7 +2227,7 @@ function renderBoodschappen(){
   // Garandeer dat vaste boodschappen altijd aanwezig zijn, ongeacht hoe de lijst geladen is
   else if(S.vasteBoodschappen.length>0){
     const aanwezig=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
-    const toVoegen=S.vasteBoodschappen.filter(vb=>!aanwezig.has(vb.naam.toLowerCase()));
+    const toVoegen=S.vasteBoodschappen.filter(vb=>!aanwezig.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase()));
     if(toVoegen.length){
       toVoegen.forEach(vb=>{
         const item={...vb,extra:true,vast:true,done:false};
@@ -2237,6 +2260,23 @@ function renderBoodschappen(){
       <span style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)">${done.length}/${S.shopItems.length} afgevinkt</span>
     </div>
     ${sRec.length>0?`<div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sRec.map(r=>`<div>• <strong>${h(r.titel)}</strong> (${gP(r.id)} pers.)</div>`).join('')}</div>`:''}
+
+    <!-- Vaste boodschappen -->
+    ${S.vasteBoodschappen.length>0?`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <span class="sec-label">Vaste boodschappen</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+        ${S.vasteBoodschappen.map(vb=>{
+          const actief=!S.vastInactief.includes(vb.naam.toLowerCase());
+          return`<div style="display:inline-flex;align-items:center;gap:0;border-radius:20px;border:1.5px solid ${actief?'var(--accent)':'var(--border2)'};overflow:hidden;background:${actief?'var(--accent-bg)':'var(--surface2)'}">
+            <button onclick="toggleVastActief('${vb.naam.replace(/'/g,"\\'")}') " style="background:none;border:none;cursor:pointer;padding:5px 10px;font-size:13px;color:${actief?'var(--accent)':'var(--text3)'};display:flex;align-items:center;gap:5px;font-weight:${actief?'600':'400'}">
+              <span style="font-size:15px">${actief?'✓':'✕'}</span> ${h(vb.naam)}
+            </button>
+            <button onclick="if(confirm('${vb.naam.replace(/'/g,"\\'")} voor altijd verwijderen uit vaste boodschappen?'))verwijderUitVast('${vb.naam.replace(/'/g,"\\'")}') " title="Permanent verwijderen" style="background:none;border:none;border-left:1px solid ${actief?'var(--accent)':'var(--border2)'};cursor:pointer;padding:5px 8px;color:var(--text3);font-size:12px;line-height:1">🗑</button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
 
     <!-- Extra toevoegen -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)">
