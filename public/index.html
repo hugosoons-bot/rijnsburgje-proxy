@@ -510,7 +510,7 @@ let S={
   laden:false,fout:'',resultaten:[],
   onboarding:false,onboardingStap:0,onboardingRichting:'fwd',
   editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,modalCropX:50,modalCropY:50,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
-  shopItems:[],extraItems:[],vasteBoodschappen:[],vastInactief:[],bevestigVast:null,toonAfgevinkt:true,
+  shopItems:[],extraItems:[],vasteBoodschappen:[],vastActief:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
   sortKookboek:'nieuwste',
   publiekeRecepten:[],ladenGemeenschap:false,
@@ -524,7 +524,7 @@ let S={
 function sav(){
   try{localStorage.setItem(SK+'-e',JSON.stringify(S.extraItems));}catch(e){}
   try{localStorage.setItem(SK+'-vb',JSON.stringify(S.vasteBoodschappen));}catch(e){}
-  try{localStorage.setItem(SK+'-vi',JSON.stringify(S.vastInactief));}catch(e){}
+  try{localStorage.setItem(SK+'-va',JSON.stringify(S.vastActief));}catch(e){}
 }
 
 function parseCats(v){if(!v)return[];if(Array.isArray(v))return v;try{const p=JSON.parse(v);return Array.isArray(p)?p:[p].filter(Boolean);}catch{return[v];}}
@@ -730,7 +730,7 @@ async function migreeerNaarPubliek(){
 async function lod(){
   try{const v=localStorage.getItem(SK+'-e');if(v)S.extraItems=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-vb');if(v)S.vasteBoodschappen=JSON.parse(v);}catch{}
-  try{const v=localStorage.getItem(SK+'-vi');if(v)S.vastInactief=JSON.parse(v);}catch{}
+  try{const v=localStorage.getItem(SK+'-va');if(v)S.vastActief=JSON.parse(v);}catch{}
   try{const v=localStorage.getItem(SK+'-toegevoegd');if(v)S.toegevoegdeIds=new Set(JSON.parse(v));}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
@@ -1511,10 +1511,10 @@ function bouwShop(){
   });
   const items=Object.values(map);
   items.forEach(ni=>{const o=S.shopItems.find(x=>x.naam.toLowerCase()===ni.naam.toLowerCase()&&x.eenheid===ni.eenheid&&!x.extra);if(o)ni.done=o.done;});
-  // Voeg vaste boodschappen toe die nog niet in extraItems zitten
+  // Voeg geselecteerde vaste boodschappen toe die nog niet in extraItems zitten
   const extraNamen=new Set(S.extraItems.map(e=>e.naam.toLowerCase()));
   S.vasteBoodschappen.forEach(vb=>{
-    if(!extraNamen.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase())){
+    if(!extraNamen.has(vb.naam.toLowerCase())&&S.vastActief.includes(vb.naam.toLowerCase())){
       S.extraItems.push({...vb,extra:true,vast:true,done:false});
     }
   });
@@ -1575,9 +1575,9 @@ async function herlaadBoodschappen(lijstId){
     return item;
   });
   S.extraItems=S.shopItems.filter(i=>i.extra);
-  // Injecteer vaste boodschappen die ontbreken (bijv. na terugkeer naar een oude week)
+  // Injecteer geselecteerde vaste boodschappen die ontbreken
   const bestaand=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
-  const toVoegen=S.vasteBoodschappen.filter(vb=>!bestaand.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase()));
+  const toVoegen=S.vasteBoodschappen.filter(vb=>!bestaand.has(vb.naam.toLowerCase())&&S.vastActief.includes(vb.naam.toLowerCase()));
   if(toVoegen.length){
     const rijen=toVoegen.map((vb,i)=>({
       list_id:lijstId,name:vb.naam,
@@ -1725,13 +1725,13 @@ function bevestigVastBoodschap(ja){
 }
 function toggleVastActief(naam){
   const k=naam.toLowerCase();
-  if(S.vastInactief.includes(k))S.vastInactief=S.vastInactief.filter(n=>n!==k);
-  else S.vastInactief.push(k);
+  if(S.vastActief.includes(k))S.vastActief=S.vastActief.filter(n=>n!==k);
+  else S.vastActief.push(k);
   sav();
   // Verwijder of voeg toe aan huidige lijst
   S.shopItems=S.shopItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
   S.extraItems=S.extraItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
-  if(!S.vastInactief.includes(k)){
+  if(S.vastActief.includes(k)){
     const vb=S.vasteBoodschappen.find(v=>v.naam.toLowerCase()===k);
     if(vb){const item={...vb,extra:true,vast:true,done:false};S.extraItems.push(item);S.shopItems.push(item);}
   }
@@ -1741,7 +1741,7 @@ function toggleVastActief(naam){
 function verwijderUitVast(naam){
   const k=naam.toLowerCase();
   S.vasteBoodschappen=S.vasteBoodschappen.filter(v=>v.naam.toLowerCase()!==k);
-  S.vastInactief=S.vastInactief.filter(n=>n!==k);
+  S.vastActief=S.vastActief.filter(n=>n!==k);
   S.shopItems=S.shopItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
   S.extraItems=S.extraItems.filter(i=>!(i.vast&&i.naam.toLowerCase()===k));
   sav();
@@ -2224,16 +2224,15 @@ function moveShopAfd(idx,afd){
 }
 function renderBoodschappen(){
   if(S.shopItems.length===0&&(S.geselecteerd.length>0||S.vasteBoodschappen.length>0))bouwShop();
-  // Garandeer dat vaste boodschappen altijd aanwezig zijn, ongeacht hoe de lijst geladen is
-  else if(S.vasteBoodschappen.length>0){
+  // Garandeer dat geselecteerde vaste boodschappen aanwezig zijn
+  else if(S.vastActief.length>0){
     const aanwezig=new Set(S.shopItems.map(i=>i.naam.toLowerCase()));
-    const toVoegen=S.vasteBoodschappen.filter(vb=>!aanwezig.has(vb.naam.toLowerCase())&&!S.vastInactief.includes(vb.naam.toLowerCase()));
+    const toVoegen=S.vasteBoodschappen.filter(vb=>!aanwezig.has(vb.naam.toLowerCase())&&S.vastActief.includes(vb.naam.toLowerCase()));
     if(toVoegen.length){
       toVoegen.forEach(vb=>{
         const item={...vb,extra:true,vast:true,done:false};
         S.extraItems.push(item);S.shopItems.push(item);
       });
-      // Sla direct op zodat volgende laad ook de vaste items bevat
       if(S.gebruiker&&S.menuId)slaBoodschappenlijstOp();
     }
   }
@@ -2267,10 +2266,10 @@ function renderBoodschappen(){
       <span class="sec-label">Vaste boodschappen</span>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
         ${S.vasteBoodschappen.map(vb=>{
-          const actief=!S.vastInactief.includes(vb.naam.toLowerCase());
+          const actief=S.vastActief.includes(vb.naam.toLowerCase());
           return`<div style="display:inline-flex;align-items:center;gap:0;border-radius:20px;border:1.5px solid ${actief?'var(--accent)':'var(--border2)'};overflow:hidden;background:${actief?'var(--accent-bg)':'var(--surface2)'}">
             <button onclick="toggleVastActief('${vb.naam.replace(/'/g,"\\'")}') " style="background:none;border:none;cursor:pointer;padding:5px 10px;font-size:13px;color:${actief?'var(--accent)':'var(--text3)'};display:flex;align-items:center;gap:5px;font-weight:${actief?'600':'400'}">
-              <span style="font-size:15px">${actief?'✓':'✕'}</span> ${h(vb.naam)}
+              <span style="font-size:15px">${actief?'✓':'+'}</span> ${h(vb.naam)}
             </button>
             <button onclick="if(confirm('${vb.naam.replace(/'/g,"\\'")} voor altijd verwijderen uit vaste boodschappen?'))verwijderUitVast('${vb.naam.replace(/'/g,"\\'")}') " title="Permanent verwijderen" style="background:none;border:none;border-left:1px solid ${actief?'var(--accent)':'var(--border2)'};cursor:pointer;padding:5px 8px;color:var(--text3);font-size:12px;line-height:1">🗑</button>
           </div>`;
