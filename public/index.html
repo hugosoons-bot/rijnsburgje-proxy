@@ -328,7 +328,7 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
     <div id="hdr-sub">laden...</div>
     <nav id="tabs" role="tablist" aria-label="Navigatie">
       <button class="tb on" role="tab" aria-selected="true" onclick="setTab('recepten')">Kookboek</button>
-      <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Weekmenu</button>
+      <button class="tb" role="tab" aria-selected="false" onclick="setTab('weekmenu')">Menu</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('boodschappen')">Boodschappen</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('vrienden')">Chefs</button>
       <button class="tb" role="tab" aria-selected="false" onclick="setTab('meldingen')">Meldingen<span id="meld-bdg" class="meld-bdg"></span></button>
@@ -2791,7 +2791,7 @@ const OB_STAPPEN=[
     illu:`<img src="/publiclogo.png" style="width:96px;height:96px;object-fit:contain;border-radius:50%;animation:ob-bounce 2s ease-in-out infinite" alt="Logo">
           <div style="font-family:'Playfair Display',serif;font-size:15px;color:#f5e6c8;font-style:italic;margin-top:4px">'t Rijnsburgje</div>`,
     titel:'Welkom bij de receptenapp!',
-    tekst:'Jouw persoonlijke plek voor recepten, weekmenu en boodschappen. We laten je in een paar stappen zien wat je allemaal kunt.',
+    tekst:'Jouw persoonlijke plek voor recepten, menu en boodschappen. We laten je in een paar stappen zien wat je allemaal kunt.',
   },
   {
     kleur:'linear-gradient(135deg,#1a2e1a 0%,#2a4a2a 100%)',
@@ -2819,9 +2819,9 @@ const OB_STAPPEN=[
           <div class="ob-mini-ui" style="margin-top:0;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#f0e0b0;font-size:11px">
             Ma · Di · Wo · Do · Vr · Za · Zo
           </div>`,
-    tab:'Weekmenu',
-    titel:'Weekmenu plannen',
-    tekst:'Wijs recepten toe aan dagen van de week en stel porties in. Deel je weekmenu met volgers. Alles staat overzichtelijk bij elkaar.',
+    tab:'Menu',
+    titel:'Menu plannen',
+    tekst:'Wijs recepten toe aan dagen van de week en stel porties in. Deel je menu met volgers. Alles staat overzichtelijk bij elkaar.',
   },
   {
     kleur:'linear-gradient(135deg,#0e1e1a 0%,#1a3a30 100%)',
@@ -2831,7 +2831,7 @@ const OB_STAPPEN=[
           </div>`,
     tab:'Boodschappen',
     titel:'Boodschappenlijst',
-    tekst:'Vanuit je weekmenu maakt de app automatisch een boodschappenlijst, gesorteerd op afdeling. Vink items af terwijl je boodschappen doet.',
+    tekst:'Vanuit je menu maakt de app automatisch een boodschappenlijst, gesorteerd op afdeling. Vink items af terwijl je boodschappen doet.',
   },
   {
     kleur:'linear-gradient(135deg,#1a0e2e 0%,#2e1a4a 100%)',
@@ -2841,7 +2841,7 @@ const OB_STAPPEN=[
           </div>`,
     tab:'Chefs',
     titel:'Bevriende chefs',
-    tekst:'Voeg chefs toe en volg hun kookboek. Bekijk recepten van bevriende chefs in je feed en sla ze op in je eigen kookboek. Deel je eigen weekmenu.',
+    tekst:'Voeg chefs toe en volg hun kookboek. Bekijk recepten van bevriende chefs in je feed en sla ze op in je eigen kookboek. Deel je eigen menu.',
   },
   {
     kleur:'linear-gradient(135deg,#2d1f0e 0%,#4a2e0a 100%)',
