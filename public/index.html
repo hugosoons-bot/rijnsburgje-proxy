@@ -2763,6 +2763,7 @@ async function registreer(){
   try{
     const{data,error}=await DB.auth.signUp({email,password:ww});
     if(error)throw error;
+    if(!data.user?.identities?.length)throw new Error('Dit e-mailadres is al in gebruik. Controleer je inbox of probeer in te loggen.');
     const username=naam.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,20)+'-'+Date.now().toString(36);
     const{error:pe}=await DB.from('profiles').insert({id:data.user.id,username,display_name:naam});
     if(pe)throw pe;
