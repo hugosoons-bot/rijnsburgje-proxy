@@ -2572,10 +2572,13 @@ function renderMeldingen(){
   const volgItems=S.volgers.map(p=>{
     const isNieuw=!gezienVolgers.has(p.id);
     const init=(p.display_name||'?')[0].toUpperCase();
+    const volgJij=S.ikVolg.some(v=>v.id===p.id);
     return`<div class="friend-row${isNieuw?' meld-nieuw':''}">
       <div class="friend-avatar">${h(init)}</div>
       <div style="flex:1"><span style="font-size:14px;font-weight:600;color:var(--text)">${h(p.display_name)}</span><span style="font-size:13px;color:var(--text3)"> volgt jou nu</span></div>
-      ${isNieuw?'<span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:2px 7px;border-radius:10px;flex-shrink:0">Nieuw</span>':''}
+      ${volgJij
+        ?'<span style="font-size:12px;color:var(--text3);padding:5px 10px;border:1px solid var(--border);border-radius:8px;flex-shrink:0">Volgend</span>'
+        :`<button onclick="volg('${p.id}')" style="font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent);border-radius:8px;padding:5px 10px;cursor:pointer;flex-shrink:0;font-family:inherit">+ Terugvolgen</button>`}
     </div>`;
   }).join('');
   const alles=meldItems+volgItems;
