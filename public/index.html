@@ -137,8 +137,8 @@ a{color:var(--accent);text-decoration:none}
 .cal-dag.gekozen{background:var(--accent);color:var(--color-bg);font-weight:700}
 .cal-dag.leeg{pointer-events:none;visibility:hidden}
 /* ── Datumkiezer modal ── */
-#dpk,#rpk,#kook-modal,#vriend-recept-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:none;align-items:flex-end;justify-content:center}
-#dpk.open,#rpk.open,#kook-modal.open,#vriend-recept-modal.open{display:flex}
+#dpk,#rpk,#kook-modal,#vriend-recept-modal,#opg-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:none;align-items:flex-end;justify-content:center}
+#dpk.open,#rpk.open,#kook-modal.open,#vriend-recept-modal.open,#opg-modal.open{display:flex}
 .dpk-box{background:var(--surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:460px;box-shadow:var(--shadow-lg);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
 .dpk-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .dpk-head-titel{font-size:16px;font-weight:700;color:var(--text)}
@@ -283,6 +283,8 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
 .btn-like{background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--text2);padding:6px 10px;border-radius:20px;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
 .btn-like:hover{background:var(--red-bg);color:var(--red)}
 .btn-like.liked{color:var(--red)}
+.btn-opgeslagen{background:transparent;border:none;cursor:pointer;font-size:13px;color:var(--text2);padding:6px 10px;border-radius:20px;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:inherit;white-space:nowrap}
+.btn-opgeslagen:hover{background:var(--blue-bg);color:var(--blue)}
 .prog-bar{display:flex;gap:6px;margin-bottom:16px}
 .prog-seg{flex:1;height:3px;border-radius:3px;background:var(--border);transition:background .3s}
 .prog-seg.done{background:var(--accent)}
@@ -447,6 +449,17 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
   </div>
 </div>
 
+<!-- Wie heeft dit recept opgeslagen -->
+<div id="opg-modal" onclick="if(event.target===this)sluitOpslaanModal()">
+  <div class="dpk-box" style="max-width:420px">
+    <div class="dpk-head">
+      <span class="dpk-head-titel" id="opg-titel">Opgeslagen door</span>
+      <button class="dpk-sluit" onclick="sluitOpslaanModal()">✕</button>
+    </div>
+    <div class="dpk-scroll" id="opg-namen" style="padding:8px 16px 16px"></div>
+  </div>
+</div>
+
 <!-- Recept preview modal: vriend weekmenu -->
 <div id="vriend-recept-modal" onclick="if(event.target===this)sluitVriendReceptModal()">
   <div class="dpk-box" style="max-width:520px">
@@ -516,7 +529,7 @@ let S={
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
-  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),mijnTitels:new Set(),
+  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),mijnTitels:new Set(),saveTitels:{},
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
 
@@ -608,6 +621,7 @@ async function laadPubliekeRecepten(){
   }
   S.publiekeRecepten=recepten;
   S.ladenGemeenschap=false;rIP();
+  laadOpslagTelling();
 }
 async function laadMeldingenDB(){
   if(!S.gebruiker)return;
@@ -681,6 +695,37 @@ async function ontvolg(userId){
   S.vriendenResultaten=S.vriendenResultaten.map(p=>p);// force re-render
   await laadVrienden();
 }
+async function laadOpslagTelling(){
+  if(!S.gebruiker)return;
+  const titels=[...new Set([...S.recepten,...S.publiekeRecepten].map(r=>r.titel).filter(Boolean))];
+  if(!titels.length){S.saveTitels={};return;}
+  const{data}=await DB.from('recipes').select('title,user_id').eq('is_public',true).in('title',titels);
+  const uids=[...new Set((data||[]).map(r=>r.user_id).filter(Boolean))];
+  const{data:profielen}=uids.length?await DB.from('profiles').select('id,display_name').in('id',uids):{data:[]};
+  const nm={};(profielen||[]).forEach(p=>nm[p.id]=p.display_name||'?');
+  const result={};
+  (data||[]).forEach(row=>{
+    const t=normTitel(row.title);
+    if(!result[t])result[t]={count:0,namen:[]};
+    result[t].count++;
+    const naam=nm[row.user_id];
+    if(naam&&!result[t].namen.includes(naam))result[t].namen.push(naam);
+  });
+  S.saveTitels=result;
+  rIP();
+}
+function toonOpslagen(receptId){
+  const r=S.recepten.find(x=>x.id===receptId)||S.publiekeRecepten.find(x=>x.id===receptId)||S.menuReceptenMap?.[receptId];
+  if(!r)return;
+  const nt=normTitel(r.titel);
+  const data=S.saveTitels[nt]||{count:0,namen:[]};
+  document.getElementById('opg-titel').textContent=`${data.count||0}× opgeslagen`;
+  document.getElementById('opg-namen').innerHTML=data.namen.length
+    ?data.namen.map(n=>`<div class="friend-row" style="padding:8px 0"><div class="friend-avatar" style="width:36px;height:36px;font-size:14px">${h(n[0]||'?').toUpperCase()}</div><span class="friend-name">${h(n)}</span></div>`).join('')
+    :'<div class="hint" style="margin-top:8px">Nog geen informatie beschikbaar.</div>';
+  document.getElementById('opg-modal').classList.add('open');
+}
+function sluitOpslaanModal(){document.getElementById('opg-modal').classList.remove('open');}
 async function laadLikesVoor(ids){
   if(!ids.length||!S.gebruiker)return;
   const{data}=await DB.from('recipe_likes').select('recipe_id,user_id').in('recipe_id',ids);
@@ -742,6 +787,7 @@ async function lod(){
   try{const v=localStorage.getItem(SK+'-toegevoegd');if(v)S.toegevoegdeIds=new Set(JSON.parse(v));}catch{}
   S.actieveWeek=getMaandag();
   await loadRecepten();
+  laadOpslagTelling();
   await migreeerNaarPubliek();
   await laadWeekmenu();
   await laadBoodschappen();
@@ -1817,7 +1863,7 @@ function buildCard(r,opts={}){
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
       ${showKopieer?((S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
-      ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
+      ${(()=>{const st=S.saveTitels[normTitel(r.titel)];return st?.count?`<button class="btn-opgeslagen" onclick="event.stopPropagation();toonOpslagen('${r.id}')">👥 ${st.count}×</button>`:''})()}
     </div>
   </div>`;
 }
