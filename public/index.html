@@ -516,7 +516,7 @@ let S={
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
-  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),
+  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),mijnTitels:new Set(),
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
 
@@ -573,11 +573,12 @@ async function togglePubliek(id){
 }
 async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
-  if(S.toegevoegdeIds.has(id))return;
+  if(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
   const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(id);
+  S.mijnTitels.add(normTitel(kopie.titel));
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   render();
   await savRecept(kopie);
@@ -598,6 +599,10 @@ async function laadPubliekeRecepten(){
     const nm={};(profielen||[]).forEach(p=>nm[p.id]=p.display_name);
     recepten.forEach(r=>r.auteursNaam=nm[r.eigenaarId]||'');
     await laadLikesVoor(recepten.map(r=>r.id));
+    // Aggregeer likes per basisrecept (zelfde titel)
+    const titGrp={};
+    recepten.forEach(r=>{const t=normTitel(r.titel);(titGrp[t]=titGrp[t]||[]).push(r.id);});
+    Object.values(titGrp).forEach(ids=>{if(ids.length>1){const tot=ids.reduce((s,id)=>s+(S.likeCounts[id]||0),0);ids.forEach(id=>S.likeCounts[id]=tot);}});
   }
   S.publiekeRecepten=recepten;
   S.ladenGemeenschap=false;rIP();
@@ -719,6 +724,7 @@ async function loadRecepten(){
   if(pt){const m={};pt.forEach(x=>m[x.recipe_id]=x.tags||[]);S.recepten.forEach(r=>r.privateTags=m[r.id]||[]);}
   const{data:pn}=await DB.from('recipe_private_notes').select('recipe_id,notes').eq('user_id',S.gebruiker.id);
   if(pn){const m={};pn.forEach(x=>m[x.recipe_id]=x.notes||'');S.recepten.forEach(r=>r.privéNotities=m[r.id]||'');}
+  S.mijnTitels=new Set(S.recepten.map(r=>normTitel(r.titel)));
 }
 async function migreeerNaarPubliek(){
   if(!S.gebruiker)return;
@@ -743,6 +749,7 @@ async function lod(){
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normTitel(t){return String(t||'').trim().toLowerCase().replace(/\s+/g,' ');}
 function sc(v,van,naar){const r=v*(naar/(van||4));return r%1===0?r:parseFloat(r.toFixed(1));}
 function fracToNum(s){const f={'¼':.25,'½':.5,'¾':.75,'⅓':.333,'⅔':.667,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875};return f[s]||parseFloat(String(s).replace(',','.'));}
 function normaliseerIng(ing){
@@ -1138,6 +1145,7 @@ async function setRating(id,v){const r=S.recepten.find(x=>x.id===id);if(r){r.rat
 async function delRec(id){
   const backup=S.recepten.find(r=>r.id===id);
   S.recepten=S.recepten.filter(r=>r.id!==id);
+  S.mijnTitels=new Set(S.recepten.map(r=>normTitel(r.titel)));
   S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
   delete S.weekPers[id];
   render();
@@ -1806,7 +1814,7 @@ function buildCard(r,opts={}){
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
-      ${showKopieer?(S.toegevoegdeIds.has(r.id)?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
+      ${showKopieer?((S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
       ${showLike?`<button class="btn-like${S.mijnLikes.has(r.id)?' liked':''}" onclick="toggleLike('${r.id}')">${S.mijnLikes.has(r.id)?'❤️':'🤍'} ${S.likeCounts[r.id]||0}</button>`:''}
     </div>
   </div>`;
@@ -2089,7 +2097,7 @@ function openVriendReceptModal(receptId){
     ${r.keuken?`<div style="font-size:13px;color:var(--text3);margin-bottom:6px">${h(r.keuken)}</div>`:''}
     ${r.omschrijving?`<div style="font-size:14px;color:var(--text2);line-height:1.5">${h(r.omschrijving)}</div>`:''}
   `;
-  const al=S.toegevoegdeIds.has(receptId);
+  const al=S.mijnTitels.has(normTitel(S.vriendenReceptModal?.titel||''))||S.toegevoegdeIds.has(receptId);
   const btn=document.getElementById('vrm-kopieer');
   btn.textContent=al?'✓ Al in kookboek':'Lijkt mij lekker';
   btn.disabled=al;
@@ -2104,11 +2112,12 @@ function sluitVriendReceptModal(){
 }
 async function voegVriendReceptToe(){
   const r=S.vriendenReceptModal;if(!r||!S.gebruiker)return;
-  if(S.toegevoegdeIds.has(r.id))return;
+  if(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
   const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(r.id);
+  S.mijnTitels.add(normTitel(r.titel));
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   sluitVriendReceptModal();
   render();
@@ -2373,7 +2382,7 @@ function renderVrienden(){
                     <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.titel)}</div>
                     ${r.keuken?`<div style="font-size:11px;color:var(--text3)">${h(r.keuken)}</div>`:''}
                   </div>
-                  ${S.toegevoegdeIds.has(r.id)?`<span style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">✓ Toegevoegd</span>`:`<span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>`}
+                  ${(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<span style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">✓ Toegevoegd</span>`:`<span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>`}
                 </div>`).join('')}</div>`}
           </div>`).join('')}
         <div style="margin-top:4px">
@@ -2442,7 +2451,7 @@ function renderVrienden(){
   const vf=S.vriendenFilter;
   const keukens=[...new Set(S.publiekeRecepten.map(r=>r.keuken).filter(Boolean))].sort();
   const cats=[...new Set(S.publiekeRecepten.flatMap(r=>parseCats(r.categorie)))].sort();
-  let gefilterd=S.publiekeRecepten;
+  let gefilterd=S.publiekeRecepten.filter(r=>!S.mijnTitels.has(normTitel(r.titel)));
   if(vf.vriend)gefilterd=gefilterd.filter(r=>r.eigenaarId===vf.vriend);
   if(vf.keuken)gefilterd=gefilterd.filter(r=>r.keuken===vf.keuken);
   if(vf.cat)gefilterd=gefilterd.filter(r=>parseCats(r.categorie).includes(vf.cat));
@@ -2491,11 +2500,13 @@ function renderVrienden(){
       ?filterBar+dezeWeekHTML
       :S.publiekeRecepten.length===0
         ?'<div class="hint">Nog geen publieke recepten van andere gebruikers.</div>'
-        :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">De pan is nog leeg voor deze filters.</div>'}</div>`;
+        :S.publiekeRecepten.length>0&&S.publiekeRecepten.every(r=>S.mijnTitels.has(normTitel(r.titel)))&&!vf.vriend&&!vf.keuken&&!vf.cat&&!vf.ster
+          ?`${filterBar}<div class="hint">Alle recepten van bevriende chefs staan al in jouw kookboek.</div>`
+          :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">De pan is nog leeg voor deze filters.</div>'}</div>`;
 
   return`
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:${S.ikVolg.length>0?'12':'16'}px">
-      <div style="font-size:13px;color:var(--text3)">${S.publiekeRecepten.length||''} recepten van bevriende chefs</div>
+      <div style="font-size:13px;color:var(--text3)">${gefilterd.length?gefilterd.length+' nieuwe recepten':'Recepten'} van bevriende chefs die je nog niet in je kookboek hebt</div>
       <button class="btn btn-accent" onclick="S.vriendenSubTab='beheer';rIP()" style="white-space:nowrap;flex-shrink:0">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Vrienden toevoegen
