@@ -344,10 +344,15 @@ mark.onleesbaar{background:#fff3cd;color:#856404;border-radius:3px;padding:1px 4
 <div id="mov" onclick="closeOvl(event)">
   <div id="mbox">
     <div id="mbox-scroll">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <h2 style="font-size:17px;color:var(--text)">Recept bewerken</h2>
         <button onclick="sluitModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);line-height:1">✕</button>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <button id="m-pub-btn" class="btn btn-accent" style="flex:1;font-size:13px" onclick="setMPubliek(true)">🌐 Publiek</button>
+        <button id="m-priv-btn" class="btn btn-ghost" style="flex:1;font-size:13px" onclick="setMPubliek(false)">🔒 Privé</button>
+      </div>
+      <div id="m-zichtbaar-hint" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.4"></div>
       <span class="sec-label">Titel</span>
       <input id="m-titel" class="inp" placeholder="Naam van het recept" style="margin-bottom:12px">
       <span class="sec-label">Omschrijving</span>
@@ -525,7 +530,7 @@ let S={
   editId:null,editResultIdx:null,vriendenProfiel:null,meldBadge:0,modalFotoBlob:null,modalCropX:50,modalCropY:50,mK:'',mC:[],mTags:[],mPriveTags:[],mIngs:[],mStps:[],
   shopItems:[],extraItems:[],vasteBoodschappen:[],vastActief:[],bevestigVast:null,toonAfgevinkt:true,
   fotoReceptPreview:null,fotoEtenPreview:null,fotoBron:'',fotoLaden:false,fotoFout:'',fotoCropX:50,fotoCropY:50,fotoOnleesbaar:0,
-  sortKookboek:'nieuwste',
+  sortKookboek:'nieuwste',mPubliek:true,
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
@@ -788,7 +793,6 @@ async function lod(){
   S.actieveWeek=getMaandag();
   await loadRecepten();
   laadOpslagTelling();
-  await migreeerNaarPubliek();
   await laadWeekmenu();
   await laadBoodschappen();
   await laadVrienden();
@@ -1248,7 +1252,7 @@ function openEdit(id){
   document.getElementById('m-ti').value='';document.getElementById('m-pti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC.includes(c)?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
-  rMT();rMPT();rMIngs();rMStps();
+  rMT();rMPT();rMIngs();rMStps();setMPubliek(r.publiek!==false);
   document.getElementById('mov').classList.add('open');
 }
 function openEditResultaat(idx){
@@ -1270,9 +1274,16 @@ function openEditResultaat(idx){
   document.getElementById('m-ti').value='';document.getElementById('m-pti').value='';
   document.getElementById('m-k').innerHTML=KEUKEN.map(k=>`<button class="cat-btn${S.mK===k?' ak':''}" onclick="tMK('${k}')">${h(k)}</button>`).join('');
   document.getElementById('m-c').innerHTML=CATS.map(c=>`<button class="cat-btn${S.mC.includes(c)?' ac':''}" onclick="tMC('${h(c)}')">${h(c)}</button>`).join('');
-  rMT();rMIngs();rMStps();
+  rMT();rMIngs();rMStps();setMPubliek(r.publiek!==false);
   document.getElementById('mov').classList.add('open');
 }
+function setMPubliek(v){
+  S.mPubliek=v;
+  document.getElementById('m-pub-btn').className='btn '+(v?'btn-accent':'btn-ghost')+' ';document.getElementById('m-pub-btn').style.flex='1';
+  document.getElementById('m-priv-btn').className='btn '+(v?'btn-ghost':'btn-accent')+' ';document.getElementById('m-priv-btn').style.flex='1';
+  document.getElementById('m-zichtbaar-hint').textContent=v?'Zichtbaar voor je chefs in het Chefs-overzicht.':'Alleen voor jou — niet gedeeld met anderen.';
+}
+function toggleResPubliek(idx){const r=S.resultaten[idx];if(!r)return;r.publiek=r.publiek===false;render();}
 function tMK(k){S.mK=S.mK===k?'':k;document.querySelectorAll('#m-k .cat-btn').forEach(b=>b.classList.toggle('ak',b.textContent===S.mK));}
 function tMC(c){const i=S.mC.indexOf(c);if(i>=0)S.mC.splice(i,1);else S.mC.push(c);document.querySelectorAll('#m-c .cat-btn').forEach(b=>b.classList.toggle('ac',S.mC.includes(b.textContent)));}
 function rMT(){document.getElementById('m-t').innerHTML=S.mTags.map((t,i)=>`<span class="lbl lbl-t">${h(t)} <span style="cursor:pointer;opacity:.6;font-size:10px" onclick="rmMT(${i})">✕</span></span>`).join('');}
@@ -1325,6 +1336,7 @@ async function saveModal(){
     r.afbeelding=document.getElementById('m-img').value.trim();
     r.afbeeldingPositie=`${S.modalCropX}% ${S.modalCropY}%`;
     r.keuken=S.mK;r.categorie=S.mC;r.tags=S.mTags;r.privateTags=S.mPriveTags;
+    r.publiek=S.mPubliek;
     r.ingredienten=S.mIngs.filter(i=>i.naam.trim());
     r.stappen=S.mStps.filter(s=>s.trim());
     r.notities=document.getElementById('m-n').value;
@@ -1832,6 +1844,7 @@ function buildCard(r,opts={}){
       :`<span class="rcard-img-emoji">${getEmoji(r)}</span>`}
       ${tijdSticker(r)?`<span class="tijd-sticker">${tijdSticker(r)}</span>`:''}
       ${showAuteur&&r.auteursNaam?`<div class="rcard-auteur">👤 ${h(r.auteursNaam)}</div>`:''}
+      ${!r.publiek&&!showKopieer?`<div style="position:absolute;top:8px;right:8px;font-size:11px;font-weight:600;background:rgba(0,0,0,.58);color:#fff;padding:2px 8px;border-radius:20px;backdrop-filter:blur(4px);pointer-events:none;z-index:1">🔒 Privé</div>`:''}
       <div class="rcard-stars-overlay">${buildStars(r.rating||0,r.id).replace('<div class="stars">','').replace('</div>','')}</div>
     </div>
     <div class="rcard-body">
@@ -1857,10 +1870,9 @@ function buildCard(r,opts={}){
       </div>`:''}
     </div>
     <div class="rcard-actions">
-      ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'In het kookboek'}</button><button class="btn btn-light" onclick="openEditResultaat(${idx})">✏️ Wijzig</button>`:''}
+      ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'In het kookboek'}</button><button class="btn btn-light" onclick="openEditResultaat(${idx})">✏️ Wijzig</button>${!r.opgeslagen?`<button class="btn ${r.publiek===false?'btn-ghost':'btn-light'}" onclick="toggleResPubliek(${idx})" title="${r.publiek===false?'Klik om publiek te maken':'Klik om privé te maken'}">${r.publiek===false?'🔒 Privé':'🌐 Publiek'}</button>`:''}`:''}
       ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Plan dit gerecht</button>`;})():''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
-      ${showPubliek?`<button class="btn ${r.publiek?'btn-accent':'btn-ghost'}" onclick="togglePubliek('${r.id}')" title="${r.publiek?'Zichtbaar voor anderen':'Alleen voor jou'}">${r.publiek?'🌐 Publiek':'🔒 Privé'}</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
       ${showKopieer?((S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
       ${(()=>{const st=S.saveTitels[normTitel(r.titel)];return st?.count?`<button class="btn-opgeslagen" onclick="event.stopPropagation();toonOpslagen('${r.id}')">👥 ${st.count}×</button>`:''})()}
