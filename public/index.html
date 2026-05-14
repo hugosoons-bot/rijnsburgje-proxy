@@ -534,7 +534,7 @@ let S={
   publiekeRecepten:[],ladenGemeenschap:false,
   vriendenFilter:{vriend:'',keuken:'',cat:'',ster:0,sorteer:'nieuwste'},
   vriendenResultaten:[],ikVolg:[],volgers:[],ladenVrienden:false,meldingen:[],
-  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),mijnTitels:new Set(),saveTitels:{},
+  feed:[],ladenFeed:false,likeCounts:{},mijnLikes:new Set(),toegevoegdeIds:new Set(),mijnTitels:new Set(),mijnBronIds:new Set(),saveTitels:{},
   weekMenuPubliek:false,feedMenus:[],menuReceptenMap:{},vriendenWekenMap:{},
 };
 
@@ -556,6 +556,7 @@ function toSB(r){
     tags:r.tags||[],servings:r.personen||4,
     rating:r.rating||null,notes:r.notities||null,
     is_public:r.publiek!==false,
+    bron_id:r.bronId||null,
     prep_time:parseInt(r.tijdBereiding)||0,
     wait_time:parseInt(r.tijdWacht)||0,
   };
@@ -570,16 +571,15 @@ function fromSB(row){
     rating:row.rating||0,notities:row.notes||'',
     tijdBereiding:row.prep_time||0,tijdWacht:row.wait_time||0,
     opgeslagen:true,datum:row.created_at?row.created_at.split('T')[0]:'',
-    publiek:row.is_public!==false,eigenaarId:row.user_id,
+    publiek:row.is_public!==false,eigenaarId:row.user_id,bronId:row.bron_id||null,
   };
 }
 async function savRecept(r){
   if(!S.gebruiker){console.warn('savRecept: niet ingelogd, sla niet op');return;}
   const row=toSB(r);
   let{error}=await DB.from('recipes').upsert(row);
-  if(error&&(error.message.includes('prep_time')||error.message.includes('wait_time'))){
-    // Kolommen bestaan nog niet — sla op zonder tijdvelden (fallback)
-    const{prep_time,wait_time,...rest}=row;
+  if(error&&(error.message.includes('prep_time')||error.message.includes('wait_time')||error.message.includes('bron_id'))){
+    const{prep_time,wait_time,bron_id,...rest}=row;
     ({error}=await DB.from('recipes').upsert(rest));
   }
   if(error)console.error('Opslaan mislukt:',error.message);
@@ -591,12 +591,14 @@ async function togglePubliek(id){
 }
 async function kopieerPubliek(id){
   const r=S.publiekeRecepten.find(x=>x.id===id)||S.menuReceptenMap[id];if(!r)return;
-  if(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(id))return;
+  if(alInKookboek(r)||S.toegevoegdeIds.has(id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
+  const bronId=r.bronId||r.id;
+  const kopie={...r,id:nieuwId,bronId,rating:0,publiek:true,eigenaarId:S.gebruiker?.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(id);
   S.mijnTitels.add(normTitel(kopie.titel));
+  S.mijnBronIds.add(bronId);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   render();
   await savRecept(kopie);
@@ -704,17 +706,17 @@ async function laadOpslagTelling(){
   if(!S.gebruiker)return;
   const titels=[...new Set([...S.recepten,...S.publiekeRecepten].map(r=>r.titel).filter(Boolean))];
   if(!titels.length){S.saveTitels={};return;}
-  const{data}=await DB.from('recipes').select('title,user_id').eq('is_public',true).in('title',titels);
+  const{data}=await DB.from('recipes').select('id,bron_id,user_id').eq('is_public',true).in('title',titels);
   const uids=[...new Set((data||[]).map(r=>r.user_id).filter(Boolean))];
   const{data:profielen}=uids.length?await DB.from('profiles').select('id,display_name').in('id',uids):{data:[]};
   const nm={};(profielen||[]).forEach(p=>nm[p.id]=p.display_name||'?');
   const result={};
   (data||[]).forEach(row=>{
-    const t=normTitel(row.title);
-    if(!result[t])result[t]={count:0,namen:[]};
-    result[t].count++;
+    const rootKey=row.bron_id||row.id;
+    if(!result[rootKey])result[rootKey]={count:0,namen:[]};
+    result[rootKey].count++;
     const naam=nm[row.user_id];
-    if(naam&&!result[t].namen.includes(naam))result[t].namen.push(naam);
+    if(naam&&!result[rootKey].namen.includes(naam))result[rootKey].namen.push(naam);
   });
   S.saveTitels=result;
   rIP();
@@ -722,8 +724,8 @@ async function laadOpslagTelling(){
 function toonOpslagen(receptId){
   const r=S.recepten.find(x=>x.id===receptId)||S.publiekeRecepten.find(x=>x.id===receptId)||S.menuReceptenMap?.[receptId];
   if(!r)return;
-  const nt=normTitel(r.titel);
-  const data=S.saveTitels[nt]||{count:0,namen:[]};
+  const rootKey=r.bronId||r.id;
+  const data=S.saveTitels[rootKey]||{count:0,namen:[]};
   document.getElementById('opg-titel').textContent=`${data.count||0}× opgeslagen`;
   document.getElementById('opg-namen').innerHTML=data.namen.length
     ?data.namen.map(n=>`<div class="friend-row" style="padding:8px 0"><div class="friend-avatar" style="width:36px;height:36px;font-size:14px">${h(n[0]||'?').toUpperCase()}</div><span class="friend-name">${h(n)}</span></div>`).join('')
@@ -777,6 +779,7 @@ async function loadRecepten(){
   const{data:pn}=await DB.from('recipe_private_notes').select('recipe_id,notes').eq('user_id',S.gebruiker.id);
   if(pn){const m={};pn.forEach(x=>m[x.recipe_id]=x.notes||'');S.recepten.forEach(r=>r.privéNotities=m[r.id]||'');}
   S.mijnTitels=new Set(S.recepten.map(r=>normTitel(r.titel)));
+  S.mijnBronIds=new Set(S.recepten.flatMap(r=>[r.id,r.bronId].filter(Boolean)));
 }
 async function migreeerNaarPubliek(){
   if(!S.gebruiker)return;
@@ -802,6 +805,10 @@ async function lod(){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function normTitel(t){return String(t||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function alInKookboek(r){
+  const rid=r.bronId||r.id;
+  return S.mijnBronIds.has(rid)||S.mijnTitels.has(normTitel(r.titel));
+}
 function sc(v,van,naar){const r=v*(naar/(van||4));return r%1===0?r:parseFloat(r.toFixed(1));}
 function fracToNum(s){const f={'¼':.25,'½':.5,'¾':.75,'⅓':.333,'⅔':.667,'⅛':.125,'⅜':.375,'⅝':.625,'⅞':.875};return f[s]||parseFloat(String(s).replace(',','.'));}
 function normaliseerIng(ing){
@@ -1198,6 +1205,7 @@ async function delRec(id){
   const backup=S.recepten.find(r=>r.id===id);
   S.recepten=S.recepten.filter(r=>r.id!==id);
   S.mijnTitels=new Set(S.recepten.map(r=>normTitel(r.titel)));
+  S.mijnBronIds=new Set(S.recepten.flatMap(r=>[r.id,r.bronId].filter(Boolean)));
   S.geselecteerd=S.geselecteerd.filter(x=>x!==id);
   delete S.weekPers[id];
   render();
@@ -1874,8 +1882,8 @@ function buildCard(r,opts={}){
       ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Plan dit gerecht</button>`;})():''}
       ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
       ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
-      ${showKopieer?((S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
-      ${(()=>{const st=S.saveTitels[normTitel(r.titel)];return st?.count?`<button class="btn-opgeslagen" onclick="event.stopPropagation();toonOpslagen('${r.id}')">👥 ${st.count}×</button>`:''})()}
+      ${showKopieer?((alInKookboek(r)||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
+      ${(()=>{const st=S.saveTitels[r.bronId||r.id];return st?.count?`<button class="btn-opgeslagen" onclick="event.stopPropagation();toonOpslagen('${r.id}')">👥 ${st.count}×</button>`:''})()}
     </div>
   </div>`;
 }
@@ -2157,7 +2165,7 @@ function openVriendReceptModal(receptId){
     ${r.keuken?`<div style="font-size:13px;color:var(--text3);margin-bottom:6px">${h(r.keuken)}</div>`:''}
     ${r.omschrijving?`<div style="font-size:14px;color:var(--text2);line-height:1.5">${h(r.omschrijving)}</div>`:''}
   `;
-  const al=S.mijnTitels.has(normTitel(S.vriendenReceptModal?.titel||''))||S.toegevoegdeIds.has(receptId);
+  const al=(S.vriendenReceptModal&&alInKookboek(S.vriendenReceptModal))||S.toegevoegdeIds.has(receptId);
   const btn=document.getElementById('vrm-kopieer');
   btn.textContent=al?'✓ Al in kookboek':'Lijkt mij lekker';
   btn.disabled=al;
@@ -2172,12 +2180,14 @@ function sluitVriendReceptModal(){
 }
 async function voegVriendReceptToe(){
   const r=S.vriendenReceptModal;if(!r||!S.gebruiker)return;
-  if(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))return;
+  if(alInKookboek(r)||S.toegevoegdeIds.has(r.id))return;
   const nieuwId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36);
-  const kopie={...r,id:nieuwId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
+  const bronId=r.bronId||r.id;
+  const kopie={...r,id:nieuwId,bronId,rating:0,publiek:true,eigenaarId:S.gebruiker.id,opgeslagen:true,datum:new Date().toISOString().split('T')[0],privateTags:[],privéNotities:''};
   S.recepten.unshift(kopie);
   S.toegevoegdeIds.add(r.id);
   S.mijnTitels.add(normTitel(r.titel));
+  S.mijnBronIds.add(bronId);
   try{localStorage.setItem(SK+'-toegevoegd',JSON.stringify([...S.toegevoegdeIds]));}catch{}
   sluitVriendReceptModal();
   render();
@@ -2442,7 +2452,7 @@ function renderVrienden(){
                     <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.titel)}</div>
                     ${r.keuken?`<div style="font-size:11px;color:var(--text3)">${h(r.keuken)}</div>`:''}
                   </div>
-                  ${(S.mijnTitels.has(normTitel(r.titel))||S.toegevoegdeIds.has(r.id))?`<span style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">✓ Toegevoegd</span>`:`<span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>`}
+                  ${(alInKookboek(r)||S.toegevoegdeIds.has(r.id))?`<span style="font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">✓ Toegevoegd</span>`:`<span style="color:var(--text3);font-size:18px;flex-shrink:0;line-height:1">›</span>`}
                 </div>`).join('')}</div>`}
           </div>`).join('')}
         <div style="margin-top:4px">
@@ -2511,7 +2521,7 @@ function renderVrienden(){
   const vf=S.vriendenFilter;
   const keukens=[...new Set(S.publiekeRecepten.map(r=>r.keuken).filter(Boolean))].sort();
   const cats=[...new Set(S.publiekeRecepten.flatMap(r=>parseCats(r.categorie)))].sort();
-  let gefilterd=S.publiekeRecepten.filter(r=>!S.mijnTitels.has(normTitel(r.titel)));
+  let gefilterd=S.publiekeRecepten.filter(r=>!alInKookboek(r)&&!S.toegevoegdeIds.has(r.id));
   if(vf.vriend)gefilterd=gefilterd.filter(r=>r.eigenaarId===vf.vriend);
   if(vf.keuken)gefilterd=gefilterd.filter(r=>r.keuken===vf.keuken);
   if(vf.cat)gefilterd=gefilterd.filter(r=>parseCats(r.categorie).includes(vf.cat));
@@ -2560,7 +2570,7 @@ function renderVrienden(){
       ?filterBar+dezeWeekHTML
       :S.publiekeRecepten.length===0
         ?'<div class="hint">Nog geen publieke recepten van andere gebruikers.</div>'
-        :S.publiekeRecepten.length>0&&S.publiekeRecepten.every(r=>S.mijnTitels.has(normTitel(r.titel)))&&!vf.vriend&&!vf.keuken&&!vf.cat&&!vf.ster
+        :S.publiekeRecepten.length>0&&S.publiekeRecepten.every(r=>alInKookboek(r)||S.toegevoegdeIds.has(r.id))&&!vf.vriend&&!vf.keuken&&!vf.cat&&!vf.ster
           ?`${filterBar}<div class="hint">Alle recepten van bevriende chefs staan al in jouw kookboek.</div>`
           :`${filterBar}<div class="cards-grid">${gefilterd.length?gefilterd.map(r=>buildCard(r,{showKopieer:true,showLike:true,showAuteur:true})).join(''):'<div class="hint">De pan is nog leeg voor deze filters.</div>'}</div>`;
 
