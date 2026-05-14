@@ -706,7 +706,8 @@ async function laadOpslagTelling(){
   if(!S.gebruiker)return;
   const titels=[...new Set([...S.recepten,...S.publiekeRecepten].map(r=>r.titel).filter(Boolean))];
   if(!titels.length){S.saveTitels={};return;}
-  const{data}=await DB.from('recipes').select('id,bron_id,user_id').eq('is_public',true).in('title',titels);
+  let{data,error}=await DB.from('recipes').select('id,bron_id,user_id').eq('is_public',true).in('title',titels);
+  if(error){({data}=await DB.from('recipes').select('id,user_id').eq('is_public',true).in('title',titels));}
   const uids=[...new Set((data||[]).map(r=>r.user_id).filter(Boolean))];
   const{data:profielen}=uids.length?await DB.from('profiles').select('id,display_name').in('id',uids):{data:[]};
   const nm={};(profielen||[]).forEach(p=>nm[p.id]=p.display_name||'?');
@@ -1880,10 +1881,11 @@ function buildCard(r,opts={}){
     <div class="rcard-actions">
       ${op?`<button class="btn ${r.opgeslagen?'btn-saved':'btn-accent'}" onclick="saveRes(${idx})">${r.opgeslagen?'✓ Opgeslagen':'In het kookboek'}</button><button class="btn btn-light" onclick="openEditResultaat(${idx})">✏️ Wijzig</button>${!r.opgeslagen?`<button class="btn ${r.publiek===false?'btn-ghost':'btn-light'}" onclick="toggleResPubliek(${idx})" title="${r.publiek===false?'Klik om publiek te maken':'Klik om privé te maken'}">${r.publiek===false?'🔒 Privé':'🌐 Publiek'}</button>`:''}`:''}
       ${showSel?(()=>{const dd=getDatesForRecipe(r.id);return dd.length?`<button class="btn btn-accent" onclick="openCalPicker('${r.id}')">📅 ${dd.length} dag${dd.length>1?'en':''}</button>`:`<button class="btn btn-dark" onclick="openCalPicker('${r.id}')">Plan dit gerecht</button>`;})():''}
-      ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')">✏️ Wijzig</button>`:''}
-      ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')">🗑 Verwijder</button>`:''}
-      ${showKopieer?((alInKookboek(r)||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
       ${(()=>{const st=S.saveTitels[r.bronId||r.id];return st?.count?`<button class="btn-opgeslagen" onclick="event.stopPropagation();toonOpslagen('${r.id}')">👥 ${st.count}×</button>`:''})()}
+      ${showEdit?`<button class="btn btn-light" onclick="openEdit('${r.id}')" title="Wijzig">✏️</button>`:''}
+      ${showDel?`<button class="btn btn-ghost" onclick="delRec('${r.id}')" title="Verwijder">🗑</button>`:''}
+      ${showKopieer?((alInKookboek(r)||S.toegevoegdeIds.has(r.id))?`<button class="btn btn-saved" disabled style="opacity:1">✓ Al in kookboek</button>`:`<button class="btn btn-accent" onclick="kopieerPubliek('${r.id}')">${parseInt(r.id,36)%2===0?'Lijkt mij lekker →':'Opslaan'}</button>`):''}
+
     </div>
   </div>`;
 }
