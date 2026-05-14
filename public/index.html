@@ -591,7 +591,9 @@ async function kopieerPubliek(id){
 async function laadPubliekeRecepten(){
   if(!S.gebruiker)return;
   S.ladenGemeenschap=true;rIP();
-  const{data,error}=await DB.from('recipes').select('*').eq('is_public',true).neq('user_id',S.gebruiker.id).order('created_at',{ascending:false});
+  const volgIds=S.ikVolg.map(p=>p.id);
+  if(!volgIds.length){S.publiekeRecepten=[];S.ladenGemeenschap=false;rIP();return;}
+  const{data,error}=await DB.from('recipes').select('*').eq('is_public',true).in('user_id',volgIds).order('created_at',{ascending:false});
   const recepten=error?[]:(data||[]).map(fromSB);
   if(recepten.length){
     const uids=[...new Set(recepten.map(r=>r.eigenaarId).filter(Boolean))];
